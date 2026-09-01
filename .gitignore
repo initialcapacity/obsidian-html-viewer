@@ -1,0 +1,26 @@
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Dependencies and generated bundles
+node_modules/
+main.js
+*.map
+
+# Test output
+coverage/
+test-results/
+.vitest/
+
+# Local Obsidian development state
+data.json
+.obsidian/
+test-vault/
+*.vault-path
+
+# Local environment files
+.env
+.env.*
+!.env.example

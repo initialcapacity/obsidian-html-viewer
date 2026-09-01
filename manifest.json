@@ -1,0 +1,10 @@
+{
+  "id": "html-document-viewer",
+  "name": "HTML Document Viewer",
+  "version": "0.0.1788286701",
+  "minAppVersion": "1.7.2",
+  "description": "View static HTML files in a strict no-script, no-network sandbox.",
+  "author": "Tyson Gern",
+  "authorUrl": "https://github.com/initialcapacity",
+  "isDesktopOnly": false
+}
