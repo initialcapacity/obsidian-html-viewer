@@ -1,5 +1,9 @@
 import { FileView, TFile, WorkspaceLeaf } from 'obsidian';
-import { createViewerIframe, navigateIframeToBlank } from './iframe-boundary';
+import {
+	createViewerIframe,
+	navigateIframeToBlank,
+	waitForIframeLayout,
+} from './iframe-boundary';
 import { prepareHtml } from './prepare-html';
 
 export const HTML_DOCUMENT_VIEW_TYPE = 'html-document-view';
@@ -83,9 +87,13 @@ export class HtmlDocumentView extends FileView {
 				return;
 			}
 
+			await waitForIframeLayout(iframe);
+			if (generation !== this.renderGeneration) {
+				return;
+			}
+
 			iframe.removeAttribute('src');
 			iframe.srcdoc = prepared;
-			iframe.hidden = false;
 			status.textContent = '';
 			status.hidden = true;
 		} catch {

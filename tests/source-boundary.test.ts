@@ -24,6 +24,9 @@ describe('runtime source boundary', () => {
 		const viewSource = source('html-document-view.ts');
 
 		expect(viewSource).toContain('iframe.srcdoc = prepared');
+		expect(viewSource.indexOf('await waitForIframeLayout(iframe)')).toBeLessThan(
+			viewSource.indexOf('iframe.srcdoc = prepared'),
+		);
 		expect(viewSource).toContain('status.textContent =');
 		expect(viewSource).not.toContain('contentEl.createEl');
 	});

@@ -9,12 +9,31 @@ export function createViewerIframe(document: Document): HTMLIFrameElement {
 	iframe.setAttribute('referrerpolicy', IFRAME_REFERRER_POLICY);
 	iframe.setAttribute('title', IFRAME_TITLE);
 	iframe.setAttribute('src', 'about:blank');
-	iframe.hidden = true;
 	return iframe;
+}
+
+type AnimationFrameScheduler = (callback: FrameRequestCallback) => number;
+
+export async function waitForIframeLayout(
+	iframe: HTMLIFrameElement,
+	requestFrame?: AnimationFrameScheduler,
+): Promise<void> {
+	iframe.hidden = false;
+
+	const ownerWindow = iframe.ownerDocument.defaultView;
+	const scheduleFrame =
+		requestFrame ??
+		ownerWindow?.requestAnimationFrame?.bind(ownerWindow);
+	if (scheduleFrame === undefined) {
+		return;
+	}
+
+	await new Promise<void>((resolve) => {
+		scheduleFrame(() => resolve());
+	});
 }
 
 export function navigateIframeToBlank(iframe: HTMLIFrameElement): void {
 	iframe.removeAttribute('srcdoc');
 	iframe.setAttribute('src', 'about:blank');
-	iframe.hidden = true;
 }

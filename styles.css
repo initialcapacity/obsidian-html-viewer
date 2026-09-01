@@ -3,6 +3,7 @@
 	display: flex;
 	min-height: 0;
 	padding: 0;
+	position: relative;
 }
 
 .html-document-viewer__frame {
@@ -17,15 +18,18 @@
 
 .html-document-viewer__status {
 	align-items: center;
+	background: #fff;
 	color: var(--text-muted);
 	display: flex;
+	inset: 0;
 	justify-content: center;
 	padding: var(--size-4-4);
+	position: absolute;
 	text-align: center;
 	width: 100%;
+	z-index: 1;
 }
 
-.html-document-viewer__status[hidden],
-.html-document-viewer__frame[hidden] {
+.html-document-viewer__status[hidden] {
 	display: none;
 }
