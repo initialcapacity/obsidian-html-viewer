@@ -28,6 +28,8 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | `e8aa544` | 0.0.1788295977 | N/A | Node.js 26.7.0 on macOS 26.6.2 and GitHub-hosted Ubuntu runner | Hidden-window fallback regression test and complete automated release suite | Pass | The layout wait now preserves the visible animation-frame path and has a bounded timer fallback for hidden documents. ESLint reported 0 findings; all 34 Vitest tests, strict type-check, production build, tagged reruns, asset checks, provenance generation, and published-release verification passed. |
 | 2026-09-01 | `e8aa544` | 0.0.1788295977 | 1.13.7 | macOS 26.6.2 desktop | Clean Community-directory uninstall, install, enable, restart, and fixture smoke test | Pass | Obsidian showed version `0.0.1788295977`. The downloaded manifest and stylesheet hashes matched the release assets; `main.js` matched the 5,429-byte release asset exactly before Obsidian's appended `/* nosourcemap */` marker. After closing and reopening the dedicated test vault, `self-contained.html` rendered immediately with its blue layout, inline CSS, green embedded PNG, and fragment link. `hostile.html` showed `SUCCESS: scripting is disabled.` with blocked remote/file/app/traversal images, no script marker, popup, or navigation. |
 | 2026-09-01 | `de72684` | 0.0.1788296371 | 1.13.7 | iPhone 16 Pro, iOS 26.6 | Clean Community-directory installation, restart, and fixture smoke test | Pass, maintainer-observed | The maintainer installed and enabled the public Community build, fully restarted Obsidian, and confirmed that both self-contained extensions rendered correctly and immediately. `hostile.html` showed `SUCCESS: scripting is disabled.` without a `SCRIPT RAN` marker, alert, popup, navigation, or form submission; document-authored remote, file, app, and traversal resources remained blocked. |
+| 2026-09-01 | Working tree based on `ecac94c` | 0.0.1788297260 | N/A | Node.js 26.7.0 on macOS 26.6.2 | Milestones 5–6 lifecycle, race, and isolation suite plus `npm run check` | Pass | ESLint reported 0 findings. Vitest passed 8 files and 54 tests, including 18 render-coordinator and 6 iframe-lifecycle tests. Strict type-check and the minified production build passed. Coverage proves 150 ms burst debouncing, immediate stale-render invalidation, current/stale failure behavior, object-URL revocation, layout-callback cancellation, same-folder and rename relevance, unrelated-folder rejection, reset cleanup, and two independent state containers. |
+| 2026-09-01 | Working tree based on `ecac94c` | 0.0.1788297260 local build | 1.13.7 | macOS 26.6.2 desktop | `live-update-a.html` / `live-update-b.html`, same file split into two panes | Pass | Installed the three local runtime artifacts into the approved `test-vault` and force-loaded that build. Both panes initially rendered version B, then independently refreshed in place to version A within the debounce window after one external source update. Splitting resized the original pane; text wrapped and the plugin introduced no horizontal overflow. Closing the right tab left the first rendered pane intact, and a later A-to-B source update refreshed the surviving pane without reopening it. |
 
 ## Automated security coverage
 
@@ -43,6 +45,16 @@ The unit suite must verify all of the following before a manual install:
 - no HTML-string insertion API in runtime source;
 - no Node.js, Electron, or network API in runtime source; and
 - consistent fixed identity/version metadata.
+
+The lifecycle suite also verifies:
+
+- a 150 ms refresh debounce with one callback for a rapid burst;
+- stale-render invalidation before asynchronous work can commit;
+- object-URL revocation on replacement, failure, supersession, and reset;
+- refresh and layout-timer cancellation during view cleanup;
+- current-file and same-folder create/modify/delete/rename relevance;
+- rejection of changes in unrelated and nested folders; and
+- isolation between two independent view-state coordinators.
 
 ## Desktop manual procedure
 
@@ -78,5 +90,15 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-No manual verification remains for milestones 1–4. New desktop and mobile
-manual checks will be added as later milestone behavior is implemented.
+No desktop verification remains for milestones 1–6. On the recorded iPhone,
+the remaining Milestone 5 regression check is: open a synced `live-update.html`,
+change that same source file on desktop, wait for Obsidian Sync, and confirm the
+already-open mobile view updates without navigating away. iPhone does not offer
+the desktop split-pane workflow used for Milestone 6; the two-pane acceptance
+test was therefore performed on desktop.
+
+An observable same-folder image/stylesheet refresh remains assigned to
+Milestone 9, when those resources become supported. Milestone 5 already watches
+same-folder create, modify, delete, and rename events; automated tests cover
+that scheduling and its unrelated-folder exclusion without claiming the asset
+itself renders early.

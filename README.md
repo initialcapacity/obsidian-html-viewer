@@ -4,11 +4,12 @@ HTML Document Viewer is an Obsidian community plugin for viewing static `.html`
 and `.htm` files stored in a vault. Each document is treated as untrusted and is
 rendered read-only inside a separate sandboxed iframe.
 
-The runtime currently implements milestones 1 and 2 from `SPEC.md`: viewing
-self-contained HTML and enforcing the no-script, no-network security boundary.
-Milestone 4's timestamp release automation is live and verified. The plugin is
-published in the Obsidian Community directory after passing its automated
-security, dependency, provenance, and reproducible-build checks.
+The runtime currently implements milestones 1–6 from `SPEC.md`: viewing
+self-contained HTML, enforcing the no-script/no-network security boundary,
+automatic releases, live updates, and independent views of the same file in
+multiple panes. The plugin is published in the Obsidian Community directory
+after passing its automated security, dependency, provenance, and
+reproducible-build checks.
 
 ## Security guarantees
 
@@ -34,12 +35,18 @@ There is no trusted mode, bypass toggle, or setting that weakens this model.
 
 ## Supported content
 
-The milestone 1–2 build supports:
+The current build supports:
 
 - ordinary static HTML;
 - inline CSS in `<style>` and `style` attributes;
 - fragment-only links such as `href="#section"`; and
 - embedded base64 raster data images using PNG, JPEG, GIF, WebP, or AVIF.
+
+An open document refreshes after its source changes. Vault changes in the same
+folder are also watched so relative assets can refresh when milestone 9 adds
+them. Changes are debounced, stale asynchronous renders are discarded, and
+each pane owns its own refresh and resource state. The same document can
+therefore remain open and live in more than one pane.
 
 Same-folder raster images and external stylesheets are specified for milestone
 9 and are deliberately not implemented yet. Their references are removed in the
@@ -54,8 +61,7 @@ current build rather than passed through to the browser.
 - Relative images and stylesheets are not yet supported.
 - SVG, CSS `@import`, CSS `url(...)` assets, `srcset`, fonts, audio, and video are
   not supported.
-- Vault-aware link navigation, live refresh, settings, and editing are not part
-  of milestones 1–2.
+- Vault-aware link navigation, settings, and editing are not supported.
 
 ## Platforms
 

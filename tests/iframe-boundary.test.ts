@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	IFRAME_REFERRER_POLICY,
 	IFRAME_SANDBOX,
@@ -42,6 +42,8 @@ describe('iframe rendering boundary', () => {
 		};
 
 		let timeoutCallback: (() => void) | undefined;
+		const cancelFrame = vi.fn();
+		const cancelTimeout = vi.fn();
 		const scheduleTimeout = (
 			callback: () => void,
 			delay: number,
@@ -51,11 +53,12 @@ describe('iframe rendering boundary', () => {
 			return 2;
 		};
 
-		const layoutReady = waitForIframeLayout(
-			iframe,
+		const layoutReady = waitForIframeLayout(iframe, {
+			cancelFrame,
+			cancelTimeout,
 			requestFrame,
 			scheduleTimeout,
-		);
+		});
 
 		expect(iframe.hidden).toBe(false);
 		expect(frameCallback).toBeTypeOf('function');
@@ -64,12 +67,16 @@ describe('iframe rendering boundary', () => {
 
 		frameCallback?.(0);
 		await layoutReady;
+		expect(cancelFrame).toHaveBeenCalledWith(1);
+		expect(cancelTimeout).toHaveBeenCalledWith(2);
 	});
 
 	it('falls back when a hidden document suspends animation frames', async () => {
 		const iframe = createViewerIframe(document);
 		let frameCallback: FrameRequestCallback | undefined;
 		let timeoutCallback: (() => void) | undefined;
+		const cancelFrame = vi.fn();
+		const cancelTimeout = vi.fn();
 		const requestFrame = (callback: FrameRequestCallback): number => {
 			frameCallback = callback;
 			return 1;
@@ -83,11 +90,12 @@ describe('iframe rendering boundary', () => {
 			return 2;
 		};
 
-		const layoutReady = waitForIframeLayout(
-			iframe,
+		const layoutReady = waitForIframeLayout(iframe, {
+			cancelFrame,
+			cancelTimeout,
 			requestFrame,
 			scheduleTimeout,
-		);
+		});
 
 		expect(frameCallback).toBeTypeOf('function');
 		expect(timeoutCallback).toBeTypeOf('function');
@@ -96,6 +104,28 @@ describe('iframe rendering boundary', () => {
 
 		// A late frame callback must be harmless after the fallback resolves.
 		frameCallback?.(0);
+		expect(cancelFrame).toHaveBeenCalledWith(1);
+		expect(cancelTimeout).toHaveBeenCalledWith(2);
+	});
+
+	it('cancels pending layout callbacks when a render is abandoned', async () => {
+		const iframe = createViewerIframe(document);
+		const controller = new AbortController();
+		const cancelFrame = vi.fn();
+		const cancelTimeout = vi.fn();
+		const layoutReady = waitForIframeLayout(iframe, {
+			cancelFrame,
+			cancelTimeout,
+			requestFrame: vi.fn(() => 11),
+			scheduleTimeout: vi.fn(() => 12),
+			signal: controller.signal,
+		});
+
+		controller.abort();
+		await layoutReady;
+
+		expect(cancelFrame).toHaveBeenCalledWith(11);
+		expect(cancelTimeout).toHaveBeenCalledWith(12);
 	});
 
 	it('removes prepared content when a view is unloaded', () => {

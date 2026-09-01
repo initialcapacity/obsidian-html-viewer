@@ -13,6 +13,7 @@ describe('runtime source boundary', () => {
 			source('html-document-view.ts'),
 			source('iframe-boundary.ts'),
 			source('prepare-html.ts'),
+			source('render-coordinator.ts'),
 		].join('\n');
 
 		expect(runtime).not.toMatch(/\.innerHTML\s*=/u);
@@ -41,10 +42,21 @@ describe('runtime source boundary', () => {
 		expect(mainSource).not.toContain("'.htm'");
 	});
 
+	it('registers every required vault event on each view', () => {
+		const viewSource = source('html-document-view.ts');
+
+		for (const event of ['create', 'modify', 'delete', 'rename']) {
+			expect(viewSource).toContain(`this.app.vault.on('${event}'`);
+		}
+		expect(viewSource).toContain('this.registerEvent(');
+	});
+
 	it('contains no desktop-only runtime imports or network APIs', () => {
-		const runtime = [source('main.ts'), source('html-document-view.ts')].join(
-			'\n',
-		);
+		const runtime = [
+			source('main.ts'),
+			source('html-document-view.ts'),
+			source('render-coordinator.ts'),
+		].join('\n');
 
 		expect(runtime).not.toMatch(/from ['"](?:node:|fs|path|electron)/u);
 		expect(runtime).not.toMatch(/\b(?:fetch|requestUrl|XMLHttpRequest)\s*\(/u);
