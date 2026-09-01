@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Safe asset failures</title>
+  <link rel="stylesheet" href="missing.css">
+  <link rel="stylesheet" href="../outside.css">
+</head>
+<body>
+  <main>
+    <h1>Content survives safe asset failures</h1>
+    <img src="missing.png">
+    <img src="unsupported.svg" alt="Unsupported SVG remains blocked">
+    <img src="../secret.png">
+    <img src="/absolute.png">
+    <img src="nested/image.png">
+    <img src="%2e%2e%2fencoded.png">
+    <img src="https://attacker.invalid/remote.png">
+    <img src="file:///secret.png">
+    <img src="app://local/secret.png">
+  </main>
+</body>
+</html>

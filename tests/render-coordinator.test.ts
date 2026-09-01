@@ -215,6 +215,39 @@ describe('render coordinator', () => {
 		expect(revokeObjectUrl).toHaveBeenCalledWith('blob:failed');
 	});
 
+	it('remains usable when a valid document follows a failed render', () => {
+		const timers = createFakeTimers();
+		const revokeObjectUrl = vi.fn();
+		const coordinator = new RenderCoordinator(
+			timers.scheduleTimeout,
+			timers.cancelTimeout,
+			revokeObjectUrl,
+		);
+		const displayError = vi.fn();
+		const failedGeneration = coordinator.beginRender();
+
+		expect(
+			coordinator.failRender(
+				failedGeneration,
+				['blob:failed-attempt'],
+				displayError,
+			),
+		).toBe(true);
+
+		const commitValidDocument = vi.fn();
+		const recoveredGeneration = coordinator.beginRender();
+		expect(
+			coordinator.tryCommit(
+				recoveredGeneration,
+				['blob:recovered'],
+				commitValidDocument,
+			),
+		).toBe(true);
+		expect(displayError).toHaveBeenCalledOnce();
+		expect(commitValidDocument).toHaveBeenCalledOnce();
+		expect(revokeObjectUrl).toHaveBeenCalledWith('blob:failed-attempt');
+	});
+
 	it('does not retain URLs when committing the new document throws', () => {
 		const timers = createFakeTimers();
 		const revokeObjectUrl = vi.fn();

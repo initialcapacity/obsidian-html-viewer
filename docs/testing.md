@@ -32,6 +32,9 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | Working tree based on `ecac94c` | 0.0.1788297260 local build | 1.13.7 | macOS 26.6.2 desktop | `live-update-a.html` / `live-update-b.html`, same file split into two panes | Pass | Installed the three local runtime artifacts into the approved `test-vault` and force-loaded that build. Both panes initially rendered version B, then independently refreshed in place to version A within the debounce window after one external source update. Splitting resized the original pane; text wrapped and the plugin introduced no horizontal overflow. Closing the right tab left the first rendered pane intact, and a later A-to-B source update refreshed the surviving pane without reopening it. |
 | 2026-09-01 | Working tree based on `04a63e5` | 0.0.1788298548 local build | 1.13.7 | macOS 26.6.2 desktop | Obsidian DOM-helper advisory fix; `live-update.html`, `self-contained.html`, and `hostile.html` | Pass | Replaced every runtime `document.createElement` call with Obsidian `createEl`/`createDiv` helpers, including CSP creation on the detached parsed document's own `<head>`. The Obsidian lint rule is enabled and reports 0 warnings. After a clean Obsidian process restart, the existing live-update view reopened, the styled self-contained document and embedded data image rendered, and the hostile fixture showed `SUCCESS: scripting is disabled.` with its unsafe resources blocked. |
 | 2026-09-01 | `674269b` | 0.0.1788300334 | 1.13.7 | iPhone 16 Pro, iOS 26.6 | Already-open `live-update.html` refreshed after its synced source changed | Pass, maintainer-observed | With the fixture open on mobile, the maintainer changed its source on desktop, waited for Obsidian Sync, and confirmed that the existing mobile view updated in place without navigating away or reopening the document. |
+| 2026-09-01 | Working tree based on `15353ff` | 0.0.1788300592 local build | N/A | Node.js 26.7.0 on macOS 26.6.2 | Milestones 7–9 lifecycle, malformed-document, asset-loader, and security suite plus `npm run check` | Pass | ESLint reported 0 findings. Vitest passed 11 files and 112 tests. Strict type-check and the minified production build passed; npm audit reported 0 vulnerabilities. Coverage includes exact same-folder resolution, encoded and Unicode paths, MIME allowlisting, partial failures, CSS serialization safety, browser HTML recovery, valid-after-failure behavior, disable cleanup source boundaries, and unchanged iframe security attributes. |
+| 2026-09-01 | Working tree based on `15353ff` | 0.0.1788300592 local build | 1.13.7 | macOS 26.6.2 desktop | Three disable/re-enable cycles; two open HTML leaves; `invalid/*.html` | Pass | Each disable detached both HTML leaves and left one ordinary new tab. After the third re-enable, `index.html` reopened immediately. A subsequent stylesheet edit produced exactly one iframe load, showing that vault handling was not duplicated. Missing tags, fragment-only markup, malformed attributes, unusual Unicode, an empty file, and asset lookup failures all recovered or displayed safe text; switching from the empty fixture back to the valid fixture worked without an error or stale view. |
+| 2026-09-01 | Working tree based on `15353ff` | 0.0.1788300592 local build | 1.13.7 | macOS 26.6.2 desktop | `same-folder-assets/index.html`, `style.css`, `image.png`, and `failures.html`, including the same document in two panes | Pass | The local stylesheet produced the distinctive green card and the vault PNG rendered. Editing the stylesheet and image changed both open panes in place; restoring them returned both panes to green. The failures fixture kept usable content and showed safe plain-text warnings for every missing, unsupported, traversal, absolute, nested, encoded-traversal, HTTP(S), `file:`, and `app:` reference. DevTools showed CSP blocking the remote CSS import and CSS image URL, with 0 `attacker.invalid` resource entries. |
 
 ## Automated security coverage
 
@@ -46,7 +49,10 @@ The unit suite must verify all of the following before a manual install:
 - browser error recovery for incomplete HTML;
 - no HTML-string insertion API in runtime source;
 - no Node.js, Electron, or network API in runtime source; and
-- consistent fixed identity/version metadata.
+- consistent fixed identity/version metadata;
+- strict same-folder asset path resolution, including encoded and Unicode input;
+- raster-image MIME allowlisting and isolated missing/unsupported failures; and
+- safe stylesheet adoption without source-text HTML interpolation.
 
 The lifecycle suite also verifies:
 
@@ -92,12 +98,29 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-No desktop or mobile source-refresh verification remains for milestones 1–6.
-The recorded iPhone does not offer the desktop split-pane workflow used for
-Milestone 6; the two-pane acceptance test was therefore performed on desktop.
+No desktop verification remains. The recorded iPhone does not offer the desktop
+split-pane workflow used for Milestone 6; the two-pane acceptance test was
+therefore performed on desktop.
 
-An observable same-folder image/stylesheet refresh remains assigned to
-Milestone 9, when those resources become supported. Milestone 5 already watches
-same-folder create, modify, delete, and rename events; automated tests cover
-that scheduling and its unrelated-folder exclusion without claiming the asset
-itself renders early.
+Milestone 9 still requires the same fixture test on the recorded iPhone 16 Pro,
+iOS 26.6, with Obsidian 1.13.7. After the release containing Milestone 9 is
+available through the Community directory, sync `same-folder-assets/index.html`,
+`style.css`, and `image.png` to the phone and confirm that the green card and
+green raster image both render. Keep the document open on mobile, edit the
+stylesheet and image on desktop, wait for Obsidian Sync, and confirm that the
+already-open mobile view updates both assets without being reopened. Record the
+observed result here; do not infer it from the desktop or automated passes.
+
+## Asset representation deviation
+
+`SPEC.md` prefers parent-created `blob:` URLs for images and a
+`data:text/css` stylesheet URL. Real Obsidian 1.13.7 testing showed that an
+empty-sandbox `srcdoc` frame has an opaque origin and cannot load a parent
+`blob:app://obsidian.md/...` URL. Obsidian's inherited application CSP also
+blocks external data stylesheets before the plugin CSP is considered. The
+implementation therefore converts allowlisted vault image bytes to base64 data
+URLs and adopts stylesheet text into a detached `<style>` element via
+`textContent`. This keeps the required empty sandbox, vault-only lookup, and
+no-network boundary intact. Serializer tests cover `</style>` injection, and
+the desktop DevTools observation above confirms that remote CSS references are
+blocked before any request is recorded.

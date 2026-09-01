@@ -12,4 +12,12 @@ export default class HtmlDocumentViewerPlugin extends Plugin {
 		);
 		this.registerExtensions(['html', 'htm'], HTML_DOCUMENT_VIEW_TYPE);
 	}
+
+	override onunload(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(
+			HTML_DOCUMENT_VIEW_TYPE,
+		)) {
+			leaf.detach();
+		}
+	}
 }

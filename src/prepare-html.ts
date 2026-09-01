@@ -1,3 +1,5 @@
+import type { HtmlAssetLoader } from './asset-loader';
+
 export const CONTENT_SECURITY_POLICY =
 	"default-src 'none'; " +
 	"script-src 'none'; " +
@@ -102,6 +104,28 @@ function isAllowedRasterDataUrl(value: string): boolean {
 	return RASTER_DATA_URL.test(value);
 }
 
+interface ImageReference {
+	element: HTMLImageElement;
+	hadAuthoredAlt: boolean;
+	reference: string;
+}
+
+interface StylesheetReference {
+	element: HTMLLinkElement;
+	reference: string;
+}
+
+interface SanitizedDocument {
+	document: Document;
+	images: ImageReference[];
+	stylesheets: StylesheetReference[];
+}
+
+export interface PreparedHtmlResult {
+	html: string;
+	warnings: string[];
+}
+
 function sanitizeAttributes(element: Element): void {
 	const tagName = element.localName.toLowerCase();
 	const authoredImageSource = tagName === 'img' && element.hasAttribute('src');
@@ -181,27 +205,142 @@ function insertContentSecurityPolicy(document: Document): void {
 	});
 }
 
-/**
- * Parse and prepare hostile HTML in a detached document. The returned string is
- * intended only for an iframe's `srcdoc` property.
- */
-export function prepareHtml(source: string): string {
+function parseAndSanitize(source: string): SanitizedDocument {
 	const parser = new DOMParser();
 	const parsed = parser.parseFromString(source, 'text/html');
 
 	removeAuthoredPoliciesAndNavigation(parsed);
 	removeElements(parsed, ACTIVE_ELEMENT_SELECTOR);
 
-	// Same-folder stylesheets are deliberately deferred until milestone 9.
-	removeElements(parsed, 'link');
+	const images = Array.from(
+		parsed.querySelectorAll<HTMLImageElement>('img[src]'),
+	).map(
+		(element): ImageReference => ({
+			element,
+			hadAuthoredAlt: element.hasAttribute('alt'),
+			reference: element.getAttribute('src') ?? '',
+		}),
+	);
+	const stylesheets = Array.from(
+		parsed.querySelectorAll<HTMLLinkElement>('link[href]'),
+	)
+		.filter((element) =>
+			(element.getAttribute('rel') ?? '')
+				.toLowerCase()
+				.split(/\s+/u)
+				.includes('stylesheet'),
+		)
+		.map(
+			(element): StylesheetReference => ({
+				element,
+				reference: element.getAttribute('href') ?? '',
+			}),
+		);
 
 	for (const element of Array.from(parsed.querySelectorAll('*'))) {
 		sanitizeAttributes(element);
 	}
 
 	disableForms(parsed);
-	insertContentSecurityPolicy(parsed);
+	return { document: parsed, images, stylesheets };
+}
 
+function serializePrepared(document: Document): string {
+	insertContentSecurityPolicy(document);
 	const serializer = new XMLSerializer();
-	return `<!doctype html>\n${serializer.serializeToString(parsed.documentElement)}`;
+	return `<!doctype html>\n${serializer.serializeToString(document.documentElement)}`;
+}
+
+function recordWarning(warnings: Set<string>, message: string): void {
+	warnings.add(message);
+}
+
+function createDetachedStylesheet(
+	document: Document,
+	css: string,
+): HTMLStyleElement {
+	const template = new DOMParser().parseFromString(
+		'<style></style>',
+		'text/html',
+	);
+	const style = template.querySelector('style');
+	if (style === null) {
+		throw new Error('Unable to create a detached stylesheet.');
+	}
+
+	const adopted = document.adoptNode(style);
+	adopted.textContent = css;
+	return adopted;
+}
+
+/**
+ * Parse and prepare hostile HTML in a detached document. The returned string is
+ * intended only for an iframe's `srcdoc` property.
+ */
+export function prepareHtml(source: string): string {
+	const sanitized = parseAndSanitize(source);
+	removeElements(sanitized.document, 'link');
+	return serializePrepared(sanitized.document);
+}
+
+/**
+ * Prepare hostile HTML while resolving only same-folder assets through an
+ * injected vault-backed loader. A failed asset is removed without failing the
+ * rest of the document.
+ */
+export async function prepareHtmlWithAssets(
+	source: string,
+	assetLoader: HtmlAssetLoader,
+): Promise<PreparedHtmlResult> {
+	const sanitized = parseAndSanitize(source);
+	const warnings = new Set<string>();
+
+	for (const image of sanitized.images) {
+		if (isAllowedRasterDataUrl(image.reference.trim())) {
+			continue;
+		}
+
+		try {
+			const result = await assetLoader.loadImage(image.reference);
+			if (result.ok) {
+				image.element.setAttribute('src', result.url);
+				image.element.removeAttribute('data-html-document-viewer-blocked');
+				continue;
+			}
+
+			recordWarning(warnings, result.message);
+			if (!image.hadAuthoredAlt) {
+				image.element.setAttribute('alt', result.message);
+			}
+		} catch {
+			const message = 'Unable to load a local image.';
+			recordWarning(warnings, message);
+			if (!image.hadAuthoredAlt) {
+				image.element.setAttribute('alt', message);
+			}
+		}
+	}
+
+	for (const stylesheet of sanitized.stylesheets) {
+		try {
+			const result = await assetLoader.loadStylesheet(stylesheet.reference);
+			if (result.ok) {
+				stylesheet.element.replaceWith(
+					createDetachedStylesheet(sanitized.document, result.css),
+				);
+			} else {
+				recordWarning(warnings, result.message);
+				stylesheet.element.remove();
+			}
+		} catch {
+			recordWarning(warnings, 'Unable to load a local stylesheet.');
+			stylesheet.element.remove();
+		}
+	}
+
+	removeElements(sanitized.document, 'link');
+	return {
+		html: serializePrepared(sanitized.document),
+		warnings: Array.from(warnings),
+	};
 }

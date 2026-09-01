@@ -36,3 +36,15 @@
 .html-document-viewer__status[hidden] {
 	display: none;
 }
+
+.html-document-viewer__status[data-state='warning'] {
+	align-items: flex-start;
+	background: var(--background-primary-alt);
+	border-bottom: 1px solid var(--background-modifier-border);
+	inset: 0 0 auto;
+	justify-content: flex-start;
+	max-height: 40%;
+	overflow: auto;
+	padding: var(--size-4-2) var(--size-4-4);
+	text-align: start;
+}

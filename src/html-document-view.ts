@@ -1,16 +1,35 @@
-import { FileView, TAbstractFile, TFile, WorkspaceLeaf } from 'obsidian';
+import {
+	FileView,
+	TAbstractFile,
+	TFile,
+	WorkspaceLeaf,
+	arrayBufferToBase64,
+} from 'obsidian';
+import { SameFolderAssetLoader } from './asset-loader';
 import {
 	createViewerIframe,
 	navigateIframeToBlank,
 	waitForIframeLayout,
 } from './iframe-boundary';
-import { prepareHtml } from './prepare-html';
+import { prepareHtmlWithAssets } from './prepare-html';
 import {
 	RenderCoordinator,
 	isRelevantVaultChange,
 } from './render-coordinator';
 
 export const HTML_DOCUMENT_VIEW_TYPE = 'html-document-view';
+
+type ViewStatusState = 'error' | 'hidden' | 'loading' | 'warning';
+
+function updateStatus(
+	status: HTMLDivElement,
+	state: ViewStatusState,
+	message = '',
+): void {
+	status.dataset.state = state;
+	status.textContent = message;
+	status.hidden = state === 'hidden';
+}
 
 export class HtmlDocumentView extends FileView {
 	private iframe: HTMLIFrameElement | null = null;
@@ -143,12 +162,25 @@ export class HtmlDocumentView extends FileView {
 			layoutAbortController.abort();
 		});
 		const objectUrls = new Set<string>();
-		status.textContent = 'Loading HTML document…';
-		status.hidden = false;
+		updateStatus(status, 'loading', 'Loading HTML document…');
 
 		try {
 			const source = await this.app.vault.cachedRead(file);
-			const prepared = prepareHtml(source);
+			const ownerWindow = iframe.ownerDocument.defaultView;
+			if (ownerWindow === null) {
+				throw new Error('HTML view does not have an owning window.');
+			}
+			const assetLoader = new SameFolderAssetLoader(
+				this.app.vault,
+				file.path,
+				(data, mimeType) =>
+					`data:${mimeType};base64,${arrayBufferToBase64(data)}`,
+				objectUrls,
+			);
+			const { html: prepared, warnings } = await prepareHtmlWithAssets(
+				source,
+				assetLoader,
+			);
 
 			if (!renderCoordinator.isCurrent(generation)) {
 				renderCoordinator.discardObjectUrls(objectUrls);
@@ -161,14 +193,20 @@ export class HtmlDocumentView extends FileView {
 			renderCoordinator.tryCommit(generation, objectUrls, () => {
 				iframe.removeAttribute('src');
 				iframe.srcdoc = prepared;
-				status.textContent = '';
-				status.hidden = true;
+				if (warnings.length === 0) {
+					updateStatus(status, 'hidden');
+				} else {
+					updateStatus(status, 'warning', warnings.join(' '));
+				}
 			});
 		} catch {
 			renderCoordinator.failRender(generation, objectUrls, () => {
 				navigateIframeToBlank(iframe);
-				status.textContent = `Unable to display “${file.path}”.`;
-				status.hidden = false;
+				updateStatus(
+					status,
+					'error',
+					`Unable to display “${file.path}”.`,
+				);
 			});
 		}
 	}

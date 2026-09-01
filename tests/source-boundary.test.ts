@@ -13,6 +13,8 @@ describe('runtime source boundary', () => {
 			source('html-document-view.ts'),
 			source('iframe-boundary.ts'),
 			source('prepare-html.ts'),
+			source('asset-loader.ts'),
+			source('mime.ts'),
 			source('render-coordinator.ts'),
 		].join('\n');
 
@@ -30,6 +32,9 @@ describe('runtime source boundary', () => {
 			viewSource.indexOf('iframe.srcdoc = prepared'),
 		);
 		expect(viewSource).toContain('status.textContent =');
+		expect(viewSource).toContain('await prepareHtmlWithAssets(');
+		expect(viewSource).toContain('new SameFolderAssetLoader(');
+		expect(viewSource).toContain('arrayBufferToBase64(data)');
 		expect(viewSource).toContain('this.contentEl.createDiv({');
 		expect(viewSource).toContain('createViewerIframe(this.contentEl)');
 	});
@@ -50,6 +55,14 @@ describe('runtime source boundary', () => {
 		expect(mainSource).not.toContain("'.htm'");
 	});
 
+	it('detaches every HTML view when the plugin is disabled', () => {
+		const mainSource = source('main.ts');
+
+		expect(mainSource).toContain('override onunload(): void');
+		expect(mainSource).toContain('this.app.workspace.getLeavesOfType(');
+		expect(mainSource).toContain('leaf.detach()');
+	});
+
 	it('registers every required vault event on each view', () => {
 		const viewSource = source('html-document-view.ts');
 
@@ -57,12 +70,15 @@ describe('runtime source boundary', () => {
 			expect(viewSource).toContain(`this.app.vault.on('${event}'`);
 		}
 		expect(viewSource).toContain('this.registerEvent(');
+		expect(viewSource.match(/this\.app\.vault\.on\(/gu)).toHaveLength(4);
 	});
 
 	it('contains no desktop-only runtime imports or network APIs', () => {
 		const runtime = [
 			source('main.ts'),
 			source('html-document-view.ts'),
+			source('asset-loader.ts'),
+			source('mime.ts'),
 			source('render-coordinator.ts'),
 		].join('\n');
 

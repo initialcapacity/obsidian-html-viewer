@@ -1,0 +1,5 @@
+<!doctype html>
+<title>Malformed attributes</title>
+<h1 class="first" class='second data-note="unterminated>Malformed attributes</h1>
+<img src="missing.png" alt="An intentionally missing image" onerror="bad()">
+<p onclick='bad()' data-safe="kept">The document remains readable.</p>
