@@ -8,7 +8,6 @@ export default defineConfig(
 		'coverage',
 		'test-results',
 		'esbuild.config.mjs',
-		'scripts/*.mjs',
 		'versions.json',
 		'main.js',
 		'package.json',
@@ -23,7 +22,11 @@ export default defineConfig(
 			},
 			parserOptions: {
 				projectService: {
-					allowDefaultProject: ['eslint.config.mts', 'manifest.json'],
+					allowDefaultProject: [
+						'eslint.config.mts',
+						'manifest.json',
+						'scripts/*.mjs',
+					],
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],
@@ -40,6 +43,15 @@ export default defineConfig(
 		rules: {
 			// These security-sensitive modules use cross-window standard DOM APIs.
 			'obsidianmd/prefer-create-el': 'off',
+		},
+	},
+	{
+		files: ['scripts/**/*.mjs'],
+		rules: {
+			// Build and release tooling runs in Node.js and is never bundled.
+			'obsidianmd/hardcoded-config-path': 'off',
+			'obsidianmd/no-nodejs-modules': 'off',
+			'obsidianmd/rule-custom-message': 'off',
 		},
 	},
 	{

@@ -1,0 +1,216 @@
+name: Release from main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Source commit SHA to repair or finish
+        required: false
+        type: string
+
+concurrency:
+  group: html-document-viewer-release-main
+  queue: max
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    name: Validate and publish one source release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.head_commit.message, 'Release-Workflow: true')
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+    steps:
+      - name: Check out the triggering source with full history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install source dependencies from the lockfile
+        run: npm ci
+
+      - name: Lint source
+        run: npm run lint
+
+      - name: Test source
+        run: npm test
+
+      - name: Type-check source
+        run: npm run typecheck
+
+      - name: Build source production bundle
+        run: npm run build
+
+      - name: Prepare and atomically push the release commit and tag
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          now_seconds="$(date -u +%s)"
+
+          for attempt in 1 2 3; do
+            git fetch --prune --tags origin \
+              "+refs/heads/main:refs/remotes/origin/main"
+            result="$(node scripts/prepare-release.mjs \
+              --source "$SOURCE_SHA" \
+              --now "$now_seconds")"
+            version="$(node -e \
+              'process.stdout.write(JSON.parse(process.argv[1]).version)' \
+              "$result")"
+            release_commit="$(node -e \
+              'process.stdout.write(JSON.parse(process.argv[1]).releaseCommit)' \
+              "$result")"
+            main_commit="$(node -e \
+              'process.stdout.write(JSON.parse(process.argv[1]).mainCommit)' \
+              "$result")"
+
+            if git push --atomic origin \
+              "$main_commit:refs/heads/main" \
+              "refs/tags/$version:refs/tags/$version"; then
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+              echo "release_commit=$release_commit" >> "$GITHUB_OUTPUT"
+              echo "main_commit=$main_commit" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "Atomic release push failed after three safe retries." >&2
+              exit 1
+            fi
+          done
+
+      - name: Check out the exact tagged release commit
+        env:
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "$VERSION^{commit}")" = "$RELEASE_COMMIT"
+          git checkout --detach "$RELEASE_COMMIT"
+
+      - name: Install release dependencies from the lockfile
+        run: npm ci
+
+      - name: Re-run lint on release metadata
+        run: npm run lint
+
+      - name: Re-run tests on release metadata
+        run: npm test
+
+      - name: Re-run type-check on release metadata
+        run: npm run typecheck
+
+      - name: Build fresh release assets
+        run: npm run build
+
+      - name: Verify required release assets
+        run: test -f main.js && test -f manifest.json && test -f styles.css
+
+      - name: Generate build provenance for every release asset
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create or safely repair the published GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_json="$(mktemp)"
+
+          if gh release view "$VERSION" \
+            --json tagName,isDraft,isPrerelease,assets > "$release_json" 2>/dev/null; then
+            test "$(jq -r '.tagName' "$release_json")" = "$VERSION"
+            test "$(jq -r '.isPrerelease' "$release_json")" = "false"
+
+            mapfile -t existing_assets < <(jq -r '.assets[].name' "$release_json")
+            for existing_asset in "${existing_assets[@]}"; do
+              case "$existing_asset" in
+                main.js|manifest.json|styles.css) ;;
+                *)
+                  echo "Unexpected existing release asset: $existing_asset" >&2
+                  exit 1
+                  ;;
+              esac
+            done
+
+            for asset in main.js manifest.json styles.css; do
+              if printf '%s\n' "${existing_assets[@]}" | grep -Fqx "$asset"; then
+                download_directory="$(mktemp -d)"
+                gh release download "$VERSION" \
+                  --pattern "$asset" \
+                  --dir "$download_directory"
+                if ! cmp --silent "$asset" "$download_directory/$asset"; then
+                  echo "Existing $asset does not match the fresh build." >&2
+                  exit 1
+                fi
+              else
+                gh release upload "$VERSION" "$asset"
+              fi
+            done
+
+            if [[ "$(jq -r '.isDraft' "$release_json")" = "true" ]]; then
+              gh release edit "$VERSION" --draft=false
+            fi
+          else
+            gh release create "$VERSION" \
+              --verify-tag \
+              --title "$VERSION" \
+              --generate-notes \
+              main.js manifest.json styles.css
+          fi
+
+      - name: Verify the published release, assets, provenance, and main manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$VERSION" --json isDraft --jq '.isDraft')" = "false"
+          test "$(gh release view "$VERSION" --json isPrerelease --jq '.isPrerelease')" = "false"
+
+          verification_directory="$(mktemp -d)"
+          gh release download "$VERSION" \
+            --pattern main.js \
+            --pattern manifest.json \
+            --pattern styles.css \
+            --dir "$verification_directory"
+          cmp --silent main.js "$verification_directory/main.js"
+          cmp --silent manifest.json "$verification_directory/manifest.json"
+          cmp --silent styles.css "$verification_directory/styles.css"
+
+          gh attestation verify main.js --repo "$GITHUB_REPOSITORY"
+          gh attestation verify manifest.json --repo "$GITHUB_REPOSITORY"
+          gh attestation verify styles.css --repo "$GITHUB_REPOSITORY"
+
+          git fetch origin "+refs/heads/main:refs/remotes/origin/main"
+          head_version="$(git show refs/remotes/origin/main:manifest.json | \
+            jq -r '.version')"
+          test "$(gh release view "$head_version" --json isDraft --jq '.isDraft')" = "false"
+          test "$(git rev-parse "$VERSION^{commit}")" = \
+            "${{ steps.release.outputs.release_commit }}"
+          gh release view "$VERSION" --json url --jq '.url'

@@ -4,9 +4,11 @@ HTML Document Viewer is an Obsidian community plugin for viewing static `.html`
 and `.htm` files stored in a vault. Each document is treated as untrusted and is
 rendered read-only inside a separate sandboxed iframe.
 
-This repository currently implements milestones 1 and 2 from `SPEC.md`: viewing
+The runtime currently implements milestones 1 and 2 from `SPEC.md`: viewing
 self-contained HTML and enforcing the no-script, no-network security boundary.
-It has not been published to the Obsidian Community directory.
+Milestone 4's timestamp release automation is implemented and locally tested.
+The first release and Community publication remain blocked on the required real
+mobile security test, so the plugin has not yet been published.
 
 ## Security guarantees
 
@@ -61,8 +63,9 @@ The runtime uses only Obsidian's Vault API and browser APIs. It does not use
 Node.js, Electron, `FileSystemAdapter`, or absolute filesystem paths, and the
 manifest supports both desktop and mobile Obsidian.
 
-Desktop and mobile behavior must still be verified manually on real Obsidian
-before publication. Current evidence and outstanding checks are recorded in
+Desktop behavior has been verified in real Obsidian. Mobile behavior and a clean
+installation from the first release must still be verified before Community
+publication. Current evidence and outstanding checks are recorded in
 [`docs/testing.md`](docs/testing.md).
 
 ## Development installation
@@ -92,8 +95,10 @@ npm run check
 ```
 
 The production bundle is generated as `main.js` and intentionally ignored by
-Git. A release, when authorized in a later milestone, must attach `main.js`,
-`manifest.json`, and `styles.css` as separate assets.
+Git. The release workflow attaches `main.js`, `manifest.json`, and `styles.css`
+as separate attested assets. Maintainer configuration, retry behavior, first
+release checks, and Community submission steps are documented in
+[`docs/releasing.md`](docs/releasing.md).
 
 ## Security reports
 
