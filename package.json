@@ -1,6 +1,6 @@
 {
   "name": "html-document-viewer",
-  "version": "0.0.1788300334",
+  "version": "0.0.1788300592",
   "description": "View static HTML files in Obsidian inside a no-script, no-network sandbox.",
   "main": "main.js",
   "type": "module",
