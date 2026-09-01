@@ -31,6 +31,7 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | Working tree based on `ecac94c` | 0.0.1788297260 | N/A | Node.js 26.7.0 on macOS 26.6.2 | Milestones 5–6 lifecycle, race, and isolation suite plus `npm run check` | Pass | ESLint reported 0 findings. Vitest passed 8 files and 54 tests, including 18 render-coordinator and 6 iframe-lifecycle tests. Strict type-check and the minified production build passed. Coverage proves 150 ms burst debouncing, immediate stale-render invalidation, current/stale failure behavior, object-URL revocation, layout-callback cancellation, same-folder and rename relevance, unrelated-folder rejection, reset cleanup, and two independent state containers. |
 | 2026-09-01 | Working tree based on `ecac94c` | 0.0.1788297260 local build | 1.13.7 | macOS 26.6.2 desktop | `live-update-a.html` / `live-update-b.html`, same file split into two panes | Pass | Installed the three local runtime artifacts into the approved `test-vault` and force-loaded that build. Both panes initially rendered version B, then independently refreshed in place to version A within the debounce window after one external source update. Splitting resized the original pane; text wrapped and the plugin introduced no horizontal overflow. Closing the right tab left the first rendered pane intact, and a later A-to-B source update refreshed the surviving pane without reopening it. |
 | 2026-09-01 | Working tree based on `04a63e5` | 0.0.1788298548 local build | 1.13.7 | macOS 26.6.2 desktop | Obsidian DOM-helper advisory fix; `live-update.html`, `self-contained.html`, and `hostile.html` | Pass | Replaced every runtime `document.createElement` call with Obsidian `createEl`/`createDiv` helpers, including CSP creation on the detached parsed document's own `<head>`. The Obsidian lint rule is enabled and reports 0 warnings. After a clean Obsidian process restart, the existing live-update view reopened, the styled self-contained document and embedded data image rendered, and the hostile fixture showed `SUCCESS: scripting is disabled.` with its unsafe resources blocked. |
+| 2026-09-01 | `674269b` | 0.0.1788300334 | 1.13.7 | iPhone 16 Pro, iOS 26.6 | Already-open `live-update.html` refreshed after its synced source changed | Pass, maintainer-observed | With the fixture open on mobile, the maintainer changed its source on desktop, waited for Obsidian Sync, and confirmed that the existing mobile view updated in place without navigating away or reopening the document. |
 
 ## Automated security coverage
 
@@ -91,12 +92,9 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-No desktop verification remains for milestones 1–6. On the recorded iPhone,
-the remaining Milestone 5 regression check is: open a synced `live-update.html`,
-change that same source file on desktop, wait for Obsidian Sync, and confirm the
-already-open mobile view updates without navigating away. iPhone does not offer
-the desktop split-pane workflow used for Milestone 6; the two-pane acceptance
-test was therefore performed on desktop.
+No desktop or mobile source-refresh verification remains for milestones 1–6.
+The recorded iPhone does not offer the desktop split-pane workflow used for
+Milestone 6; the two-pane acceptance test was therefore performed on desktop.
 
 An observable same-folder image/stylesheet refresh remains assigned to
 Milestone 9, when those resources become supported. Milestone 5 already watches
