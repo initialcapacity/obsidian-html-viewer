@@ -20,7 +20,9 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | `b8474c1` | 0.0.1788290428 release-equivalent local build | N/A | Node.js 26.7.0 on macOS 26.6.2 | iOS first-render regression test and complete automated suite | Pass | The iframe is visible for one layout frame before `srcdoc` navigation. ESLint: 0 findings. Vitest: 7 files, 33 tests passed. Strict type-check and minified production build passed. |
 | 2026-09-01 | `b8474c1` | 0.0.1788290428 release-equivalent local build | 1.13.7 | macOS 26.6.2 desktop | Fresh first open of `self-contained.html` and `hostile.html` | Pass | After an Obsidian reload, each fixture rendered immediately when opened directly. The hostile fixture showed `SUCCESS: scripting is disabled.` with no active marker or navigation. |
 | 2026-09-01 | `b8474c1` | 0.0.1788290428 release-equivalent local build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | Fresh first open of `self-contained.html` | Pass, maintainer-observed | Before the fix, the first open painted blank until navigating away and back. After syncing the fixed runtime and fully restarting Obsidian, the document rendered immediately on first open. |
-| 2026-09-01 | `b8474c1` | 0.0.1788290428 release-equivalent local build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `hostile.html` visible security behavior | Pass, maintainer-observed | `SUCCESS: scripting is disabled.` appeared immediately. The maintainer confirmed no popup or navigation occurred. Direct mobile network capture was not performed; that evidence remains outstanding below. |
+| 2026-09-01 | `b8474c1` | 0.0.1788290428 release-equivalent local build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `hostile.html` visible security behavior | Pass, maintainer-observed | `SUCCESS: scripting is disabled.` appeared immediately. The maintainer confirmed no popup or navigation occurred. |
+| 2026-09-01 | `29cdb83` | 0.0.1788292792 | N/A | GitHub-hosted Ubuntu runner and clean local install on macOS 26.6.2 | Automatic release and independent asset verification | Pass | The workflow completed every source/tagged check, produced one annotated monotonic tag and published release, and verified the default-branch manifest. A clean local `npm ci` and `npm run check` passed all 33 tests. Downloaded `main.js`, `manifest.json`, and `styles.css` were byte-identical to a fresh local build, matched their published SHA-256 digests, and passed GitHub provenance verification. |
+| 2026-09-01 | `29cdb83` | 0.0.1788292792 | 1.13.7 | iPhone 16 Pro, iOS 26.6 and LAN test server on macOS 26.6.2 | Mobile no-network control test | Pass, maintainer and server observed | Safari first fetched a temporary LAN control page, proving phone-to-server reachability. Obsidian then opened a synced hostile probe containing remote stylesheet, image, and scripted-fetch URLs for that server and showed `SUCCESS: scripting is disabled.` Two subsequent server-log observations contained zero new requests. |
 
 ## Automated security coverage
 
@@ -60,11 +62,11 @@ Use only the dedicated vault explicitly approved by the maintainer.
 11. Disable the plugin or close the view and confirm the frame is blanked without
     an unhandled rejection.
 
-## Remaining mobile release-blocking check
+## Mobile network observation
 
-The real-device rendering, no-script, popup, and navigation checks passed on the
-iPhone recorded above. Before Community submission, complete a
-platform-appropriate network observation while opening `hostile.html` and record
-that no document-authored remote, `file:`, or `app:` request was attempted. The
-automated sanitizer/CSP tests and the desktop Network-panel test are green, but
-they do not replace the mobile observation required by the specification.
+The real-device rendering, no-script, popup, navigation, and no-network checks
+passed on the iPhone recorded above. The network test used a temporary HTTP
+server reachable only on the local network. A Safari control request returned
+success, while opening the hostile probe in Obsidian caused no request for its
+stylesheet, image, or scripted-fetch endpoints. The server was stopped
+immediately after the observation.
