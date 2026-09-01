@@ -65,8 +65,8 @@ manifest supports both desktop and mobile Obsidian.
 
 Desktop and mobile behavior have been verified in real Obsidian, including a
 real-device mobile no-network observation. A clean desktop installation from
-the published release has also passed. Current evidence and the remaining clean
-Community-directory installation check are recorded in
+the published release and a clean mobile Community-directory installation have
+also passed. Current evidence is recorded in
 [`docs/testing.md`](docs/testing.md).
 
 ## Development installation

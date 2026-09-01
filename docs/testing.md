@@ -27,6 +27,7 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | `c70b9b4` | 0.0.1788294198 | 1.13.7 | macOS 26.6.2 desktop | Clean Community-directory uninstall, install, enable, restart, and first-open test | Regression found | The public build installed and rendered `self-contained.html`, but reopening the test vault in a second Obsidian window exposed a suspended `requestAnimationFrame`: the view remained on `Loading HTML document…` while its owner document was hidden. The Community-installed artifact was preserved for comparison and the issue was fixed before signing off the desktop check. |
 | 2026-09-01 | `e8aa544` | 0.0.1788295977 | N/A | Node.js 26.7.0 on macOS 26.6.2 and GitHub-hosted Ubuntu runner | Hidden-window fallback regression test and complete automated release suite | Pass | The layout wait now preserves the visible animation-frame path and has a bounded timer fallback for hidden documents. ESLint reported 0 findings; all 34 Vitest tests, strict type-check, production build, tagged reruns, asset checks, provenance generation, and published-release verification passed. |
 | 2026-09-01 | `e8aa544` | 0.0.1788295977 | 1.13.7 | macOS 26.6.2 desktop | Clean Community-directory uninstall, install, enable, restart, and fixture smoke test | Pass | Obsidian showed version `0.0.1788295977`. The downloaded manifest and stylesheet hashes matched the release assets; `main.js` matched the 5,429-byte release asset exactly before Obsidian's appended `/* nosourcemap */` marker. After closing and reopening the dedicated test vault, `self-contained.html` rendered immediately with its blue layout, inline CSS, green embedded PNG, and fragment link. `hostile.html` showed `SUCCESS: scripting is disabled.` with blocked remote/file/app/traversal images, no script marker, popup, or navigation. |
+| 2026-09-01 | `de72684` | 0.0.1788296371 | 1.13.7 | iPhone 16 Pro, iOS 26.6 | Clean Community-directory installation, restart, and fixture smoke test | Pass, maintainer-observed | The maintainer installed and enabled the public Community build, fully restarted Obsidian, and confirmed that both self-contained extensions rendered correctly and immediately. `hostile.html` showed `SUCCESS: scripting is disabled.` without a `SCRIPT RAN` marker, alert, popup, navigation, or form submission; document-authored remote, file, app, and traversal resources remained blocked. |
 
 ## Automated security coverage
 
@@ -77,14 +78,5 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-The clean desktop Community-directory installation has passed. One mobile check
-remains: in the dedicated iPhone test vault, disable and uninstall the existing
-synced/development copy, browse for **HTML Document Viewer** by Tyson Gern in
-Community plugins, install and enable version `0.0.1788295977`, fully quit and
-reopen Obsidian, then fresh-open `self-contained.html` and `hostile.html`. A
-newer Community version is also acceptable when it contains commit `debd056`.
-Confirm that the self-contained fixture paints immediately and that the hostile
-fixture shows `SUCCESS: scripting is disabled.` without a popup, navigation, or
-`SCRIPT RAN` marker. The synced iPhone runtime and real-device no-network test
-already passed, but they are not substitutes for this clean Community-directory
-installation observation.
+No manual verification remains for milestones 1–4. New desktop and mobile
+manual checks will be added as later milestone behavior is implemented.
