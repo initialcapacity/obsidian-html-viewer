@@ -172,10 +172,13 @@ function insertContentSecurityPolicy(document: Document): void {
 		throw new Error('Parsed HTML did not contain a head element.');
 	}
 
-	const meta = document.createElement('meta');
-	meta.setAttribute('http-equiv', 'Content-Security-Policy');
-	meta.setAttribute('content', CONTENT_SECURITY_POLICY);
-	head.insertBefore(meta, head.firstChild);
+	head.createEl('meta', {
+		attr: {
+			content: CONTENT_SECURITY_POLICY,
+			'http-equiv': 'Content-Security-Policy',
+		},
+		prepend: true,
+	});
 }
 
 /**

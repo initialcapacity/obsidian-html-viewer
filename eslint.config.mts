@@ -35,17 +35,6 @@ export default defineConfig(
 	},
 	...obsidianmd.configs.recommended,
 	{
-		files: [
-			'src/html-document-view.ts',
-			'src/iframe-boundary.ts',
-			'src/prepare-html.ts',
-		],
-		rules: {
-			// These security-sensitive modules use cross-window standard DOM APIs.
-			'obsidianmd/prefer-create-el': 'off',
-		},
-	},
-	{
 		files: ['scripts/**/*.mjs'],
 		rules: {
 			// Build and release tooling runs in Node.js and is never bundled.

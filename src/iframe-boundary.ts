@@ -2,14 +2,16 @@ export const IFRAME_SANDBOX = '';
 export const IFRAME_REFERRER_POLICY = 'no-referrer';
 export const IFRAME_TITLE = 'HTML document';
 
-export function createViewerIframe(document: Document): HTMLIFrameElement {
-	const iframe = document.createElement('iframe');
-	iframe.className = 'html-document-viewer__frame';
-	iframe.setAttribute('sandbox', IFRAME_SANDBOX);
-	iframe.setAttribute('referrerpolicy', IFRAME_REFERRER_POLICY);
-	iframe.setAttribute('title', IFRAME_TITLE);
-	iframe.setAttribute('src', 'about:blank');
-	return iframe;
+export function createViewerIframe(parent: HTMLElement): HTMLIFrameElement {
+	return parent.createEl('iframe', {
+		cls: 'html-document-viewer__frame',
+		attr: {
+			referrerpolicy: IFRAME_REFERRER_POLICY,
+			sandbox: IFRAME_SANDBOX,
+			src: 'about:blank',
+			title: IFRAME_TITLE,
+		},
+	});
 }
 
 type AnimationFrameScheduler = (callback: FrameRequestCallback) => number;

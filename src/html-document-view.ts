@@ -105,24 +105,26 @@ export class HtmlDocumentView extends FileView {
 			return;
 		}
 
-		const ownerDocument = this.contentEl.ownerDocument;
-		const status = ownerDocument.createElement('div');
-		status.className = 'html-document-viewer__status';
-		status.setAttribute('role', 'status');
-		status.setAttribute('aria-live', 'polite');
-
-		const iframe = createViewerIframe(ownerDocument);
-		const ownerWindow = ownerDocument.defaultView;
+		const ownerWindow = this.contentEl.ownerDocument.defaultView;
 		if (ownerWindow === null) {
 			throw new Error('HTML view does not have an owning window.');
 		}
+
+		this.contentEl.replaceChildren();
+		const status = this.contentEl.createDiv({
+			cls: 'html-document-viewer__status',
+			attr: {
+				'aria-live': 'polite',
+				role: 'status',
+			},
+		});
+		const iframe = createViewerIframe(this.contentEl);
 		const renderCoordinator = new RenderCoordinator(
 			ownerWindow.setTimeout.bind(ownerWindow),
 			ownerWindow.clearTimeout.bind(ownerWindow),
 			ownerWindow.URL.revokeObjectURL.bind(ownerWindow.URL),
 		);
 		this.contentEl.classList.add('html-document-viewer');
-		this.contentEl.replaceChildren(status, iframe);
 		this.status = status;
 		this.iframe = iframe;
 		this.renderCoordinator = renderCoordinator;

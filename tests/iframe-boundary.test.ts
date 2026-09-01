@@ -11,7 +11,7 @@ import {
 
 describe('iframe rendering boundary', () => {
 	it('uses an empty sandbox with no permissions', () => {
-		const iframe = createViewerIframe(document);
+		const iframe = createViewerIframe(document.body);
 
 		expect(IFRAME_SANDBOX).toBe('');
 		expect(iframe.hasAttribute('sandbox')).toBe(true);
@@ -22,7 +22,7 @@ describe('iframe rendering boundary', () => {
 	});
 
 	it('sets the required privacy and accessibility attributes', () => {
-		const iframe = createViewerIframe(document);
+		const iframe = createViewerIframe(document.body);
 
 		expect(IFRAME_REFERRER_POLICY).toBe('no-referrer');
 		expect(IFRAME_TITLE).toBe('HTML document');
@@ -33,7 +33,7 @@ describe('iframe rendering boundary', () => {
 	});
 
 	it('waits for a visible layout frame before srcdoc navigation', async () => {
-		const iframe = createViewerIframe(document);
+		const iframe = createViewerIframe(document.body);
 		iframe.hidden = true;
 		let frameCallback: FrameRequestCallback | undefined;
 		const requestFrame = (callback: FrameRequestCallback): number => {
@@ -72,7 +72,7 @@ describe('iframe rendering boundary', () => {
 	});
 
 	it('falls back when a hidden document suspends animation frames', async () => {
-		const iframe = createViewerIframe(document);
+		const iframe = createViewerIframe(document.body);
 		let frameCallback: FrameRequestCallback | undefined;
 		let timeoutCallback: (() => void) | undefined;
 		const cancelFrame = vi.fn();
@@ -109,7 +109,7 @@ describe('iframe rendering boundary', () => {
 	});
 
 	it('cancels pending layout callbacks when a render is abandoned', async () => {
-		const iframe = createViewerIframe(document);
+		const iframe = createViewerIframe(document.body);
 		const controller = new AbortController();
 		const cancelFrame = vi.fn();
 		const cancelTimeout = vi.fn();
@@ -129,7 +129,7 @@ describe('iframe rendering boundary', () => {
 	});
 
 	it('removes prepared content when a view is unloaded', () => {
-		const iframe = createViewerIframe(document);
+		const iframe = createViewerIframe(document.body);
 		iframe.srcdoc = '<p>prepared</p>';
 		iframe.hidden = false;
 

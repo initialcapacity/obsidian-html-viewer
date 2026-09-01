@@ -19,6 +19,7 @@ describe('runtime source boundary', () => {
 		expect(runtime).not.toMatch(/\.innerHTML\s*=/u);
 		expect(runtime).not.toMatch(/\.outerHTML\s*=/u);
 		expect(runtime).not.toContain('insertAdjacentHTML');
+		expect(runtime).not.toContain('.createElement(');
 	});
 
 	it('uses srcdoc only for prepared output and textContent for status messages', () => {
@@ -29,7 +30,14 @@ describe('runtime source boundary', () => {
 			viewSource.indexOf('iframe.srcdoc = prepared'),
 		);
 		expect(viewSource).toContain('status.textContent =');
-		expect(viewSource).not.toContain('contentEl.createEl');
+		expect(viewSource).toContain('this.contentEl.createDiv({');
+		expect(viewSource).toContain('createViewerIframe(this.contentEl)');
+	});
+
+	it('keeps the Obsidian DOM-helper lint rule enabled', () => {
+		const lintConfig = readFileSync(resolve('eslint.config.mts'), 'utf8');
+
+		expect(lintConfig).not.toContain("'obsidianmd/prefer-create-el': 'off'");
 	});
 
 	it('registers both extensions without leading dots', () => {
