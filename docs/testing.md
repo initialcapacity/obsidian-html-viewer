@@ -23,6 +23,7 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | `b8474c1` | 0.0.1788290428 release-equivalent local build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `hostile.html` visible security behavior | Pass, maintainer-observed | `SUCCESS: scripting is disabled.` appeared immediately. The maintainer confirmed no popup or navigation occurred. |
 | 2026-09-01 | `29cdb83` | 0.0.1788292792 | N/A | GitHub-hosted Ubuntu runner and clean local install on macOS 26.6.2 | Automatic release and independent asset verification | Pass | The workflow completed every source/tagged check, produced one annotated monotonic tag and published release, and verified the default-branch manifest. A clean local `npm ci` and `npm run check` passed all 33 tests. Downloaded `main.js`, `manifest.json`, and `styles.css` were byte-identical to a fresh local build, matched their published SHA-256 digests, and passed GitHub provenance verification. |
 | 2026-09-01 | `29cdb83` | 0.0.1788292792 | 1.13.7 | iPhone 16 Pro, iOS 26.6 and LAN test server on macOS 26.6.2 | Mobile no-network control test | Pass, maintainer and server observed | Safari first fetched a temporary LAN control page, proving phone-to-server reachability. Obsidian then opened a synced hostile probe containing remote stylesheet, image, and scripted-fetch URLs for that server and showed `SUCCESS: scripting is disabled.` Two subsequent server-log observations contained zero new requests. |
+| 2026-09-01 | `38a85d1` | 0.0.1788293616 | N/A | Obsidian Community directory | Publication and automated review | Pass with one style advisory | The public listing is live at `https://community.obsidian.md/plugins/html-document-viewer`. Artifact attestations, suspicious-network scanning, dependency scanning, obfuscation scanning, and byte-for-byte build reproduction passed. The reviewer reported only `obsidianmd/prefer-create-el` at three plugin-owned structural element creation sites; the detached-document CSP insertion intentionally uses the owning document's standard DOM API. |
 
 ## Automated security coverage
 
@@ -70,3 +71,12 @@ server reachable only on the local network. A Safari control request returned
 success, while opening the hostile probe in Obsidian caused no request for its
 stylesheet, image, or scripted-fetch endpoints. The server was stopped
 immediately after the observation.
+
+## Remaining manual verification
+
+Install the public Community-directory build into clean desktop and mobile test
+vaults, confirm that Obsidian reports version `0.0.1788293616`, and repeat the
+self-contained and hostile fixture smoke tests. The release-asset desktop
+installation and the synced iPhone runtime have passed, but those are not
+substitutes for observing a fresh installation through the Community directory
+on each platform.

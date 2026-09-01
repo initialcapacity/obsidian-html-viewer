@@ -6,9 +6,9 @@ rendered read-only inside a separate sandboxed iframe.
 
 The runtime currently implements milestones 1 and 2 from `SPEC.md`: viewing
 self-contained HTML and enforcing the no-script, no-network security boundary.
-Milestone 4's timestamp release automation is implemented and locally tested.
-The first release and Community publication remain blocked on the required real
-mobile security test, so the plugin has not yet been published.
+Milestone 4's timestamp release automation is live and verified. The plugin is
+published in the Obsidian Community directory after passing its automated
+security, dependency, provenance, and reproducible-build checks.
 
 ## Security guarantees
 
@@ -63,9 +63,10 @@ The runtime uses only Obsidian's Vault API and browser APIs. It does not use
 Node.js, Electron, `FileSystemAdapter`, or absolute filesystem paths, and the
 manifest supports both desktop and mobile Obsidian.
 
-Desktop behavior has been verified in real Obsidian. Mobile behavior and a clean
-installation from the first release must still be verified before Community
-publication. Current evidence and outstanding checks are recorded in
+Desktop and mobile behavior have been verified in real Obsidian, including a
+real-device mobile no-network observation. A clean desktop installation from
+the published release has also passed. Current evidence and the remaining clean
+Community-directory installation check are recorded in
 [`docs/testing.md`](docs/testing.md).
 
 ## Development installation
