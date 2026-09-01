@@ -13,10 +13,14 @@ export function createViewerIframe(document: Document): HTMLIFrameElement {
 }
 
 type AnimationFrameScheduler = (callback: FrameRequestCallback) => number;
+type TimeoutScheduler = (callback: () => void, delay: number) => number;
+
+export const IFRAME_LAYOUT_TIMEOUT_MS = 100;
 
 export async function waitForIframeLayout(
 	iframe: HTMLIFrameElement,
 	requestFrame?: AnimationFrameScheduler,
+	scheduleTimeout?: TimeoutScheduler,
 ): Promise<void> {
 	iframe.hidden = false;
 
@@ -27,9 +31,22 @@ export async function waitForIframeLayout(
 	if (scheduleFrame === undefined) {
 		return;
 	}
+	const scheduleFallback =
+		scheduleTimeout ?? ownerWindow?.setTimeout.bind(ownerWindow);
 
 	await new Promise<void>((resolve) => {
-		scheduleFrame(() => resolve());
+		let resolved = false;
+		const resolveOnce = (): void => {
+			if (resolved) {
+				return;
+			}
+
+			resolved = true;
+			resolve();
+		};
+
+		scheduleFrame(resolveOnce);
+		scheduleFallback?.(resolveOnce, IFRAME_LAYOUT_TIMEOUT_MS);
 	});
 }
 

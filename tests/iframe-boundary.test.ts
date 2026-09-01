@@ -3,6 +3,7 @@ import {
 	IFRAME_REFERRER_POLICY,
 	IFRAME_SANDBOX,
 	IFRAME_TITLE,
+	IFRAME_LAYOUT_TIMEOUT_MS,
 	createViewerIframe,
 	navigateIframeToBlank,
 	waitForIframeLayout,
@@ -40,14 +41,61 @@ describe('iframe rendering boundary', () => {
 			return 1;
 		};
 
-		const layoutReady = waitForIframeLayout(iframe, requestFrame);
+		let timeoutCallback: (() => void) | undefined;
+		const scheduleTimeout = (
+			callback: () => void,
+			delay: number,
+		): number => {
+			expect(delay).toBe(IFRAME_LAYOUT_TIMEOUT_MS);
+			timeoutCallback = callback;
+			return 2;
+		};
+
+		const layoutReady = waitForIframeLayout(
+			iframe,
+			requestFrame,
+			scheduleTimeout,
+		);
 
 		expect(iframe.hidden).toBe(false);
 		expect(frameCallback).toBeTypeOf('function');
+		expect(timeoutCallback).toBeTypeOf('function');
 		expect(iframe.hasAttribute('srcdoc')).toBe(false);
 
 		frameCallback?.(0);
 		await layoutReady;
+	});
+
+	it('falls back when a hidden document suspends animation frames', async () => {
+		const iframe = createViewerIframe(document);
+		let frameCallback: FrameRequestCallback | undefined;
+		let timeoutCallback: (() => void) | undefined;
+		const requestFrame = (callback: FrameRequestCallback): number => {
+			frameCallback = callback;
+			return 1;
+		};
+		const scheduleTimeout = (
+			callback: () => void,
+			delay: number,
+		): number => {
+			expect(delay).toBe(IFRAME_LAYOUT_TIMEOUT_MS);
+			timeoutCallback = callback;
+			return 2;
+		};
+
+		const layoutReady = waitForIframeLayout(
+			iframe,
+			requestFrame,
+			scheduleTimeout,
+		);
+
+		expect(frameCallback).toBeTypeOf('function');
+		expect(timeoutCallback).toBeTypeOf('function');
+		timeoutCallback?.();
+		await layoutReady;
+
+		// A late frame callback must be harmless after the fallback resolves.
+		frameCallback?.(0);
 	});
 
 	it('removes prepared content when a view is unloaded', () => {
