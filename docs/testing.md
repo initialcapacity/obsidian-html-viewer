@@ -24,6 +24,9 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | `29cdb83` | 0.0.1788292792 | N/A | GitHub-hosted Ubuntu runner and clean local install on macOS 26.6.2 | Automatic release and independent asset verification | Pass | The workflow completed every source/tagged check, produced one annotated monotonic tag and published release, and verified the default-branch manifest. A clean local `npm ci` and `npm run check` passed all 33 tests. Downloaded `main.js`, `manifest.json`, and `styles.css` were byte-identical to a fresh local build, matched their published SHA-256 digests, and passed GitHub provenance verification. |
 | 2026-09-01 | `29cdb83` | 0.0.1788292792 | 1.13.7 | iPhone 16 Pro, iOS 26.6 and LAN test server on macOS 26.6.2 | Mobile no-network control test | Pass, maintainer and server observed | Safari first fetched a temporary LAN control page, proving phone-to-server reachability. Obsidian then opened a synced hostile probe containing remote stylesheet, image, and scripted-fetch URLs for that server and showed `SUCCESS: scripting is disabled.` Two subsequent server-log observations contained zero new requests. |
 | 2026-09-01 | `38a85d1` | 0.0.1788293616 | N/A | Obsidian Community directory | Publication and automated review | Pass with one style advisory | The public listing is live at `https://community.obsidian.md/plugins/html-document-viewer`. Artifact attestations, suspicious-network scanning, dependency scanning, obfuscation scanning, and byte-for-byte build reproduction passed. The reviewer reported only `obsidianmd/prefer-create-el` at three plugin-owned structural element creation sites; the detached-document CSP insertion intentionally uses the owning document's standard DOM API. |
+| 2026-09-01 | `c70b9b4` | 0.0.1788294198 | 1.13.7 | macOS 26.6.2 desktop | Clean Community-directory uninstall, install, enable, restart, and first-open test | Regression found | The public build installed and rendered `self-contained.html`, but reopening the test vault in a second Obsidian window exposed a suspended `requestAnimationFrame`: the view remained on `Loading HTML document…` while its owner document was hidden. The Community-installed artifact was preserved for comparison and the issue was fixed before signing off the desktop check. |
+| 2026-09-01 | `e8aa544` | 0.0.1788295977 | N/A | Node.js 26.7.0 on macOS 26.6.2 and GitHub-hosted Ubuntu runner | Hidden-window fallback regression test and complete automated release suite | Pass | The layout wait now preserves the visible animation-frame path and has a bounded timer fallback for hidden documents. ESLint reported 0 findings; all 34 Vitest tests, strict type-check, production build, tagged reruns, asset checks, provenance generation, and published-release verification passed. |
+| 2026-09-01 | `e8aa544` | 0.0.1788295977 | 1.13.7 | macOS 26.6.2 desktop | Clean Community-directory uninstall, install, enable, restart, and fixture smoke test | Pass | Obsidian showed version `0.0.1788295977`. The downloaded manifest and stylesheet hashes matched the release assets; `main.js` matched the 5,429-byte release asset exactly before Obsidian's appended `/* nosourcemap */` marker. After closing and reopening the dedicated test vault, `self-contained.html` rendered immediately with its blue layout, inline CSS, green embedded PNG, and fragment link. `hostile.html` showed `SUCCESS: scripting is disabled.` with blocked remote/file/app/traversal images, no script marker, popup, or navigation. |
 
 ## Automated security coverage
 
@@ -74,9 +77,14 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-Install the public Community-directory build into clean desktop and mobile test
-vaults, confirm that Obsidian reports version `0.0.1788293616`, and repeat the
-self-contained and hostile fixture smoke tests. The release-asset desktop
-installation and the synced iPhone runtime have passed, but those are not
-substitutes for observing a fresh installation through the Community directory
-on each platform.
+The clean desktop Community-directory installation has passed. One mobile check
+remains: in the dedicated iPhone test vault, disable and uninstall the existing
+synced/development copy, browse for **HTML Document Viewer** by Tyson Gern in
+Community plugins, install and enable version `0.0.1788295977`, fully quit and
+reopen Obsidian, then fresh-open `self-contained.html` and `hostile.html`. A
+newer Community version is also acceptable when it contains commit `debd056`.
+Confirm that the self-contained fixture paints immediately and that the hostile
+fixture shows `SUCCESS: scripting is disabled.` without a popup, navigation, or
+`SCRIPT RAN` marker. The synced iPhone runtime and real-device no-network test
+already passed, but they are not substitutes for this clean Community-directory
+installation observation.
