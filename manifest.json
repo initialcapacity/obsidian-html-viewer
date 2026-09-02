@@ -1,7 +1,7 @@
 {
   "id": "html-document-viewer",
   "name": "HTML Document Viewer",
-  "version": "0.0.1788371054",
+  "version": "0.0.1788372208",
   "minAppVersion": "1.7.2",
   "description": "View static HTML files in a strict no-script, no-network sandbox.",
   "author": "Tyson Gern",
