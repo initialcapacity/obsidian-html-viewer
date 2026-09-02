@@ -34,13 +34,13 @@
     "node": ">=22.22.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.11",
     "esbuild": "0.28.2",
-    "eslint": "^9.39.5",
+    "eslint": "^10.9.1",
     "eslint-plugin-obsidianmd": "^0.4.2",
     "fast-check": "^4.9.0",
     "globals": "^17.12.0",
