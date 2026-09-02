@@ -35,6 +35,8 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | Working tree based on `15353ff` | 0.0.1788300592 local build | N/A | Node.js 26.7.0 on macOS 26.6.2 | Milestones 7–9 lifecycle, malformed-document, asset-loader, and security suite plus `npm run check` | Pass | ESLint reported 0 findings. Vitest passed 11 files and 112 tests. Strict type-check and the minified production build passed; npm audit reported 0 vulnerabilities. Coverage includes exact same-folder resolution, encoded and Unicode paths, MIME allowlisting, partial failures, CSS serialization safety, browser HTML recovery, valid-after-failure behavior, disable cleanup source boundaries, and unchanged iframe security attributes. |
 | 2026-09-01 | Working tree based on `15353ff` | 0.0.1788300592 local build | 1.13.7 | macOS 26.6.2 desktop | Three disable/re-enable cycles; two open HTML leaves; `invalid/*.html` | Pass | Each disable detached both HTML leaves and left one ordinary new tab. After the third re-enable, `index.html` reopened immediately. A subsequent stylesheet edit produced exactly one iframe load, showing that vault handling was not duplicated. Missing tags, fragment-only markup, malformed attributes, unusual Unicode, an empty file, and asset lookup failures all recovered or displayed safe text; switching from the empty fixture back to the valid fixture worked without an error or stale view. |
 | 2026-09-01 | Working tree based on `15353ff` | 0.0.1788300592 local build | 1.13.7 | macOS 26.6.2 desktop | `same-folder-assets/index.html`, `style.css`, `image.png`, and `failures.html`, including the same document in two panes | Pass | The local stylesheet produced the distinctive green card and the vault PNG rendered. Editing the stylesheet and image changed both open panes in place; restoring them returned both panes to green. The failures fixture kept usable content and showed safe plain-text warnings for every missing, unsupported, traversal, absolute, nested, encoded-traversal, HTTP(S), `file:`, and `app:` reference. DevTools showed CSP blocking the remote CSS import and CSS image URL, with 0 `attacker.invalid` resource entries. |
+| 2026-09-01 | `5cff652` | 0.0.1788303302 | N/A | GitHub-hosted Ubuntu runner and Obsidian Community directory | Automatic release, independent asset verification, provenance, and Community review | Pass | Every source and tagged-release check passed. The published `main.js`, `manifest.json`, and `styles.css` were byte-identical to a fresh local build and all three provenance attestations verified. The Community review passed release-attestation, suspicious-network, vault-access, dependency, obfuscation, and byte-for-byte build-reproduction checks; version 0.0.1788303302 became the current public release. |
+| 2026-09-01 | `5cff652` | 0.0.1788303302 Community build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `same-folder-assets/index.html`, `style.css`, and `image.png` | Pass, maintainer-observed | The synced fixture initially rendered its green stylesheet and green raster image. With the document left open, a desktop stylesheet change refreshed the mobile card to purple while the image remained green; a separate image change then refreshed the image to purple while the card remained purple. Neither update required navigation or reopening. The synced files were restored byte-for-byte to the committed green baseline afterward. |
 
 ## Automated security coverage
 
@@ -98,18 +100,10 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-No desktop verification remains. The recorded iPhone does not offer the desktop
-split-pane workflow used for Milestone 6; the two-pane acceptance test was
-therefore performed on desktop.
-
-Milestone 9 still requires the same fixture test on the recorded iPhone 16 Pro,
-iOS 26.6, with Obsidian 1.13.7. After the release containing Milestone 9 is
-available through the Community directory, sync `same-folder-assets/index.html`,
-`style.css`, and `image.png` to the phone and confirm that the green card and
-green raster image both render. Keep the document open on mobile, edit the
-stylesheet and image on desktop, wait for Obsidian Sync, and confirm that the
-already-open mobile view updates both assets without being reopened. Record the
-observed result here; do not infer it from the desktop or automated passes.
+No manual verification remains for milestones 1–9. The recorded iPhone does not
+offer the desktop split-pane workflow used for Milestone 6; the two-pane
+acceptance test was therefore performed on desktop, while the same-folder
+stylesheet and image were both rendered and refreshed on desktop and mobile.
 
 ## Asset representation deviation
 
