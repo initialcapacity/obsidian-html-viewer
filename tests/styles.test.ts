@@ -10,11 +10,7 @@ describe('viewer styles', () => {
 		document.body.replaceChildren();
 	});
 
-	it.each([
-		['iframe', 'html-document-viewer__frame'],
-		['div', 'html-document-viewer__links'],
-		['pre', 'html-document-viewer__source'],
-	])('keeps a hidden %s hidden despite its display rule', (tagName, className) => {
+	it('keeps a hidden status message out of layout', () => {
 		const parsedStyles = new DOMParser().parseFromString(
 			`<style>${stylesheet}</style>`,
 			'text/html',
@@ -25,12 +21,23 @@ describe('viewer styles', () => {
 		}
 		document.head.append(style);
 
-		const element = document.body.createEl(
-			tagName as keyof HTMLElementTagNameMap,
-			{ cls: className },
-		);
+		const element = document.body.createDiv({
+			cls: 'html-document-viewer__status',
+		});
 		element.hidden = true;
 
 		expect(getComputedStyle(element).display).toBe('none');
+	});
+
+	it('contains no toolbar, source, zoom, or print presentation rules', () => {
+		for (const obsoleteSelector of [
+			'__toolbar',
+			'__links',
+			'__source',
+			'--printing',
+			'@media print',
+		]) {
+			expect(stylesheet).not.toContain(obsoleteSelector);
+		}
 	});
 });

@@ -44,6 +44,8 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | `bf72360` | 0.0.1788317389 Community build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `mathml.html`, `css-raw-text.html`, and `failures.html` | Pass, maintainer-observed | After installing the new Community release and force-quitting Obsidian, the maintainer validated all three regressions: native static MathML rendered, raw CSS child/nested selectors and generated content rendered correctly, and the resource-warning banner remained readable above rather than over the surviving document content. |
 | 2026-09-02 | Working tree based on `5c330d0` | 0.0.1788317881 local build | N/A | Node.js 26.7.0 on macOS 26.6.2; Chromium and WebKit | Dependency update, release-credential isolation, feature, compatibility, coverage, and browser security suites | Pass | ESLint reported 0 findings. Vitest passed 19 files and 165 tests with 91.33% line and 81.56% branch coverage. Current and minimum Obsidian API type checks and the production build passed. Playwright proved in both engines that hostile prepared HTML made zero server requests, executed no script, opened no popup, and did not navigate. `npm audit --audit-level=low` reported 0 vulnerabilities. |
 | 2026-09-02 | Working tree based on `5c330d0` | 0.0.1788317881 local build | 1.13.7 | macOS 26.6.2 desktop | Packaged feature, security, refresh, split-pane, print, and lifecycle smoke test | Pass after three live regressions were found and fixed | Nested linked CSS, inline and linked-CSS image paths, responsive image markup, source/preview, 100–110% zoom and reset, safe relative navigation, missing-target warnings, diagnostics copy, native Print dialog, MathML, and `.htm` all worked. The smoke test found author CSS overriding `hidden`, opaque-sandbox printing, and stale cached reads; regression tests now cover visibility and fresh reads, and the secure parent-owned print path opened the native dialog. Same-size green→purple→green stylesheet changes committed into both open panes. The hostile fixture showed the no-script success marker, no popup or navigation, and zero `attacker.invalid` requests in a cleared filtered Network panel. Disabling removed every viewer root and detached the HTML leaf; re-enabling loaded the plugin and reopened the fixture. Final automated verification passed 20 files and 168 tests, both browser security runs, the production build, and an audit with 0 vulnerabilities. |
+| 2026-09-02 | `b96726e` | 0.0.1788371054 | N/A | GitHub-hosted Ubuntu runner | Automatic two-job release and independent artifact verification | Pass | The read-only job passed the clean install, 168 tests, both type checks, production build, and Chromium/WebKit security suite. The publishing job atomically pushed the release commit and tag, attested all three assets, published the release, then downloaded and compared every asset and verified its provenance. |
+| 2026-09-02 | Working tree based on `6ea3862` | 0.0.1788371054 local build | N/A | Node.js 26.7.0 on macOS 26.6.2; Chromium and WebKit | Toolbar and control-feature removal | Pass | Removed the complete toolbar module plus reload, source/preview, zoom, print, diagnostics, and parent-owned navigation behavior. The simplified view owns only its safe status element and sandboxed iframe. All 165 remaining tests, lint, current and minimum API type checks, coverage, production build, and both browser security runs passed. |
 
 ## Automated security coverage
 
@@ -71,8 +73,6 @@ The unit suite must verify all of the following before a manual install:
 - stylesheet media, title, disabled, and alternate semantics;
 - responsive `srcset`, `<picture>`, inline CSS image URLs, and linked-stylesheet
   image URLs resolved relative to the correct vault file;
-- safe parent-owned relative HTML navigation and source/preview, zoom, reload,
-  print, and diagnostic controls;
 - fixed DOM element-count and nesting-depth limits;
 - fixed source, reference, per-asset, aggregate-byte, and embedded-output limits;
 - deduplicated asset reads and abort propagation through stale render work; and
@@ -127,10 +127,11 @@ immediately after the observation.
 ## Remaining manual verification
 
 The original milestones remain manually verified by release `0.0.1788317389`.
-The new nested-asset, responsive-image, toolbar, printing, and parent-owned
-navigation features now have automated and packaged desktop coverage. They still
-need the focused mobile Obsidian smoke test before release sign-off. The revised
-two-job release workflow also needs one operational GitHub-hosted run.
+The nested-asset and responsive-image features have automated and packaged
+desktop coverage but still need a focused mobile Obsidian smoke test. The
+toolbar and all associated controls were removed after mobile review. The
+revised two-job release workflow passed operationally for release
+`0.0.1788371054`.
 
 ## Asset representation deviation
 

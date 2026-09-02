@@ -4,7 +4,7 @@
 
 Build, test, release, and publish a simple, robust Obsidian community plugin that displays static HTML documents stored in an Obsidian vault.
 
-The plugin is a read-only viewer. It must render ordinary static HTML while treating every HTML file as untrusted content. Scripts must not run, resources outside the vault must not load, and document markup must never be interpreted in Obsidian's own DOM. An explicitly requested source view may place the original source in a parent-owned element only as plain `textContent`.
+The plugin is a read-only viewer. It must render ordinary static HTML while treating every HTML file as untrusted content. Scripts must not run, resources outside the vault must not load, and document markup must never be interpreted in Obsidian's own DOM.
 
 This specification is written for a Codex implementation agent. Work through the milestones in order, keep the repository usable after every milestone, and do not claim a milestone is complete without satisfying its acceptance criteria.
 
@@ -63,11 +63,6 @@ empty iframe sandbox or no-network policy:
 - Raster bytes must match their extension-selected MIME signature and stay
   within decoded dimension and pixel-count limits before being embedded as
   base64 data URLs.
-- Relative `.html` and `.htm` links are removed from the frame and exposed as
-  parent-owned navigation controls. The frame itself remains unable to
-  navigate.
-- Parent-owned controls provide reload, plain-text source/preview, bounded zoom,
-  print, and safe diagnostic copying.
 - Refresh is based on the exact dependency paths collected during preparation,
   not every file in the source folder.
 - Parsing has explicit source-size, DOM element-count, and nesting-depth limits.

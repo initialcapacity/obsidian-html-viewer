@@ -13,7 +13,6 @@ import {
 } from './html-sanitizer';
 import { isRenderAborted, throwIfRenderAborted } from './render-abort';
 import { rewriteSrcset } from './responsive-images';
-import { resolveVaultReference } from './vault-path';
 
 export {
 	CONTENT_SECURITY_POLICY,
@@ -26,16 +25,9 @@ export {
 
 export const MAX_EMBEDDED_ASSET_CHARACTERS = 25 * 1024 * 1024;
 
-export interface DocumentNavigationTarget {
-	fragment: string | null;
-	label: string;
-	path: string;
-}
-
 export interface PreparedHtmlResult {
 	dependencies: string[];
 	html: string;
-	navigation: DocumentNavigationTarget[];
 	warnings: string[];
 }
 
@@ -70,35 +62,6 @@ function createBudget(
 			return true;
 		},
 	};
-}
-
-function navigationTargets(
-	documentPath: string,
-	references: ReturnType<typeof parseAndSanitize>['navigation'],
-): DocumentNavigationTarget[] {
-	const targets = new Map<string, DocumentNavigationTarget>();
-	for (const reference of references) {
-		const resolved = resolveVaultReference(documentPath, reference.reference, {
-			allowFragment: true,
-		});
-		if (!resolved.ok || !/[.]html?$/iu.test(resolved.fileName)) {
-			continue;
-		}
-		const key = `${resolved.path}#${resolved.fragment ?? ''}`;
-		const target = {
-			fragment: resolved.fragment,
-			label: reference.label,
-			path: resolved.path,
-		};
-		targets.set(key, target);
-		reference.element.setAttribute('aria-disabled', 'true');
-		reference.element.setAttribute('data-html-document-viewer-navigation', key);
-		reference.element.setAttribute(
-			'title',
-			`Open “${reference.label}” from the viewer toolbar.`,
-		);
-	}
-	return Array.from(targets.values());
 }
 
 async function loadImage(
@@ -263,11 +226,9 @@ export async function prepareHtmlWithAssets(
 	}
 
 	removeElements(sanitized.document, 'link');
-	const navigation = navigationTargets(documentPath, sanitized.navigation);
 	return {
 		dependencies: Array.from(assetLoader.getDependencies?.() ?? []),
 		html: serializePrepared(sanitized.document),
-		navigation,
 		warnings: Array.from(warnings),
 	};
 }

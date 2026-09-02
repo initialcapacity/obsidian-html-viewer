@@ -36,7 +36,10 @@ describe('runtime source boundary', () => {
 		expect(viewSource).toContain('new VaultAssetLoader(');
 		expect(viewSource).toContain('arrayBufferToBase64(data)');
 		expect(viewSource).toContain('this.contentEl.createDiv({');
-		expect(viewSource).toContain('createViewerIframe(viewport)');
+		expect(viewSource).toContain('createViewerIframe(this.contentEl)');
+		expect(runtimeSource()).not.toContain('ViewerToolbar');
+		expect(runtimeSource()).not.toContain('navigator.clipboard');
+		expect(runtimeSource()).not.toContain('.print()');
 	});
 
 	it('keeps the Obsidian DOM-helper lint rule enabled', () => {

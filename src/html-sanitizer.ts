@@ -106,17 +106,10 @@ export interface StylesheetReference {
 	title: string | null;
 }
 
-export interface NavigationReference {
-	element: HTMLAnchorElement | HTMLAreaElement;
-	label: string;
-	reference: string;
-}
-
 export interface SanitizedDocument {
 	document: Document;
 	images: ImageReference[];
 	imageSets: ImageSetReference[];
-	navigation: NavigationReference[];
 	stylesheets: StylesheetReference[];
 }
 
@@ -277,16 +270,6 @@ function disableForms(document: Document): void {
 	}
 }
 
-function navigationLabel(element: HTMLAnchorElement | HTMLAreaElement): string {
-	const label =
-		element.textContent?.trim() ||
-		element.getAttribute('aria-label')?.trim() ||
-		element.getAttribute('title')?.trim() ||
-		element.getAttribute('href')?.trim() ||
-		'HTML document';
-	return label.length <= 120 ? label : `${label.slice(0, 117)}…`;
-}
-
 export function parseAndSanitize(source: string): SanitizedDocument {
 	if (source.length > MAX_HTML_SOURCE_CHARACTERS) {
 		throw new Error('HTML document exceeds the safe rendering size limit.');
@@ -334,16 +317,6 @@ export function parseAndSanitize(source: string): SanitizedDocument {
 			reference: element.getAttribute('href') ?? '',
 			title: element.getAttribute('title'),
 		}));
-	const navigation = Array.from(
-		parsed.querySelectorAll<HTMLAnchorElement | HTMLAreaElement>('a[href],area[href]'),
-	)
-		.filter((element) => !(element.getAttribute('href') ?? '').trim().startsWith('#'))
-		.map((element): NavigationReference => ({
-			element,
-			label: navigationLabel(element),
-			reference: element.getAttribute('href') ?? '',
-		}));
-
 	if (images.length + imageSets.length + stylesheets.length > MAX_ASSET_REFERENCES) {
 		throw new Error('HTML document contains too many asset references.');
 	}
@@ -351,7 +324,7 @@ export function parseAndSanitize(source: string): SanitizedDocument {
 		sanitizeAttributes(element);
 	}
 	disableForms(parsed);
-	return { document: parsed, images, imageSets, navigation, stylesheets };
+	return { document: parsed, images, imageSets, stylesheets };
 }
 
 function insertContentSecurityPolicy(document: Document): void {

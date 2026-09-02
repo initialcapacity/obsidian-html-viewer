@@ -29,7 +29,6 @@ describe('vault-relative path resolution', () => {
 	])('accepts %s', (_label, documentPath, reference, expectedPath) => {
 		expect(resolveAssetPath(documentPath, reference)).toEqual({
 			fileName: expectedPath.slice(expectedPath.lastIndexOf('/') + 1),
-			fragment: null,
 			ok: true,
 			path: expectedPath,
 		});

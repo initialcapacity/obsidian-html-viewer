@@ -5,8 +5,7 @@ and `.htm` files stored in a vault. Each document is treated as untrusted and is
 rendered read-only inside a separate sandboxed iframe.
 
 The runtime implements milestones 1–9 from `SPEC.md` plus nested vault assets,
-responsive images, CSS image URLs, dependency-aware refresh, safe document
-navigation, and viewer controls. The plugin is published in the Obsidian
+responsive images, CSS image URLs, and dependency-aware refresh. The plugin is published in the Obsidian
 Community directory after passing its automated security, dependency,
 provenance, and reproducible-build checks.
 
@@ -16,17 +15,14 @@ Install **HTML Document Viewer** from **Settings → Community plugins → Brows
 Enable it, then select an `.html` or `.htm` file in the file explorer. The file
 opens read-only in a normal Obsidian pane. It can be split into multiple panes,
 and open views refresh when the document or one of its referenced assets
-changes. The toolbar provides reload, source/preview, zoom, print, diagnostics,
-and safe navigation to relative HTML documents.
+changes.
 
 ## Security guarantees
 
 Document markup is never interpreted in Obsidian's DOM. The plugin parses HTML
 in a detached document, removes active and navigation-producing content, inserts
 a restrictive Content Security Policy (CSP), serializes with `XMLSerializer`,
-and assigns only that prepared output to an iframe's `srcdoc` property. When the
-user requests source view, the original source is displayed as plain text with
-`textContent`.
+and assigns only that prepared output to an iframe's `srcdoc` property.
 
 The iframe has an empty `sandbox` attribute. It receives no `allow-scripts`,
 `allow-same-origin`, navigation, popup, form, or download permissions. The CSP
@@ -35,8 +31,7 @@ manifests, and every default resource type.
 
 - Inline and external scripts do not run.
 - Inline event handlers are removed.
-- Forms and in-frame non-fragment navigation are disabled. Safe relative links
-  to `.html` and `.htm` files are exposed only through parent-owned controls.
+- Forms and non-fragment navigation are disabled.
 - HTTP, HTTPS, protocol-relative, `file:`, `app:`, vault-escaping traversal, and
   other unsupported document-authored resource references are removed.
 - Supported vault raster bytes are rewritten to generated base64 `data:` URLs
@@ -72,8 +67,7 @@ The current build supports:
 - raster `url(...)` references in inline styles and linked stylesheets;
 - relative `.css` stylesheets within the vault. Stylesheet `media` and
   `title` semantics are preserved; disabled and alternate stylesheets remain
-  inactive; and
-- relative `.html` and `.htm` navigation through the parent-owned toolbar.
+  inactive.
 
 An open document refreshes after its source or an exact referenced dependency
 changes through a create, modification, deletion, or rename. Unrelated vault
@@ -83,7 +77,7 @@ same document can therefore remain open and live in more than one pane.
 
 Disabling the plugin closes all open HTML Document Viewer panes. This blanks
 their sandboxed frames, cancels pending refreshes, unregisters their vault
-listeners, and discards prepared source, dependency, and warning state. After
+listeners, and discards prepared dependency state. After
 re-enabling, opening an `.html` or `.htm` file creates a fresh view; stale tabs
 are intentionally not left behind.
 
@@ -109,8 +103,7 @@ sandbox, the no-network guarantee, and the vault-only validation boundary.
   Local images are limited to 10 MiB each, 16,384 pixels in either dimension,
   and 40 million decoded pixels. Stylesheets are limited to 1 MiB each, total
   loaded assets to 25 MiB, and embedded asset output to 25 MiB.
-- Navigation supports relative HTML targets but not arbitrary vault files or
-  automatic fragment scrolling. Settings and editing are not supported.
+- Settings and editing are not supported.
 
 ## Platforms
 

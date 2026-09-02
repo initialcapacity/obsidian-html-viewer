@@ -2,7 +2,6 @@ export const MAX_VAULT_REFERENCE_LENGTH = 1_024;
 
 export interface ResolvedVaultReference {
 	fileName: string;
-	fragment: string | null;
 	ok: true;
 	path: string;
 }
@@ -17,7 +16,6 @@ export type VaultReferenceResult =
 	| ResolvedVaultReference;
 
 interface ResolveVaultReferenceOptions {
-	allowFragment?: boolean;
 	maxLength?: number;
 }
 
@@ -45,24 +43,13 @@ export function resolveVaultReference(
 		reference.length > maximumLength ||
 		reference.includes('\0') ||
 		reference.includes('\\') ||
+		reference.includes('#') ||
+		reference.includes('?') ||
 		reference.startsWith('/') ||
 		reference.startsWith('//') ||
 		/^[a-z][a-z\d+.-]*:/iu.test(reference) ||
 		/%(?:00|2f|5c)/iu.test(reference)
 	) {
-		return reject();
-	}
-
-	let fragment: string | null = null;
-	const fragmentIndex = reference.indexOf('#');
-	if (fragmentIndex !== -1) {
-		if (options.allowFragment !== true) {
-			return reject();
-		}
-		fragment = reference.slice(fragmentIndex + 1);
-		reference = reference.slice(0, fragmentIndex);
-	}
-	if (reference.includes('?') || reference.length === 0) {
 		return reject();
 	}
 
@@ -113,7 +100,6 @@ export function resolveVaultReference(
 	}
 	return {
 		fileName,
-		fragment,
 		ok: true,
 		path: resolvedSegments.join('/'),
 	};

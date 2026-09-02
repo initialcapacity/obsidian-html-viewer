@@ -11,9 +11,9 @@ vi.mock('obsidian', () => {
 			path: string;
 			stat: { size: number };
 		} | null = null;
-		leaf: { app: unknown; openFile: ReturnType<typeof vi.fn> };
+		leaf: { app: unknown };
 
-		constructor(leaf: { app: unknown; openFile: ReturnType<typeof vi.fn> }) {
+		constructor(leaf: { app: unknown }) {
 			this.app = leaf.app;
 			this.contentEl = document.body.createDiv();
 			this.leaf = leaf;
@@ -119,7 +119,6 @@ interface TestVault {
 
 function createView(source: string): {
 	file: { basename: string; name: string; path: string; stat: { size: number } };
-	leaf: { app: { vault: TestVault }; openFile: ReturnType<typeof vi.fn> };
 	vault: TestVault;
 	view: HtmlDocumentView;
 } {
@@ -129,7 +128,7 @@ function createView(source: string): {
 		read: vi.fn(async () => source),
 		readBinary: vi.fn(),
 	};
-	const leaf = { app: { vault }, openFile: vi.fn() };
+	const leaf = { app: { vault } };
 	return {
 		file: {
 			basename: 'index',
@@ -137,7 +136,6 @@ function createView(source: string): {
 			path: 'folder/index.html',
 			stat: { size: source.length },
 		},
-		leaf,
 		vault,
 		view: new HtmlDocumentView(leaf as unknown as WorkspaceLeaf),
 	};
@@ -217,15 +215,15 @@ describe('HtmlDocumentView behavior', () => {
 		expect(status?.dataset.state).toBe('error');
 	});
 
-		it('discards an older read after a newer render starts', async () => {
-			const { file, vault, view } = createView('unused');
-			let finishFirstRead: ((source: string) => void) | undefined;
-			const firstRead = new Promise<string>((resolveRead) => {
-				finishFirstRead = resolveRead;
-			});
-			vault.read
-				.mockReturnValueOnce(firstRead)
-				.mockResolvedValueOnce('<h1>Newest render</h1>');
+	it('discards an older read after a newer render starts', async () => {
+		const { file, vault, view } = createView('unused');
+		let finishFirstRead: ((source: string) => void) | undefined;
+		const firstRead = new Promise<string>((resolveRead) => {
+			finishFirstRead = resolveRead;
+		});
+		vault.read
+			.mockReturnValueOnce(firstRead)
+			.mockResolvedValueOnce('<h1>Newest render</h1>');
 
 		const olderRender = view.onLoadFile(file as never);
 		await Promise.resolve();
@@ -239,103 +237,20 @@ describe('HtmlDocumentView behavior', () => {
 		expect(iframe?.srcdoc).not.toContain('Stale render');
 	});
 
-	it('exposes source, zoom, and safe document navigation in the toolbar', async () => {
-		const { file, leaf, vault, view } = createView(
-			'<h1>Source text</h1><a href="next.html">Next page</a>',
-		);
-		const target = { path: 'folder/next.html' };
-		vault.getFileByPath.mockImplementation((path: string) =>
-			path === target.path ? target : null,
+	it('renders without controls or non-fragment navigation', async () => {
+		const { file, view } = createView(
+			'<a id="document" href="next.html">Next</a><a id="fragment" href="#local">Local</a>',
 		);
 		await view.onLoadFile(file as never);
 
-		const buttons = Array.from(view.contentEl.querySelectorAll('button'));
-		const button = (text: string): HTMLButtonElement => {
-			const found = buttons.find((candidate) => candidate.textContent === text);
-			if (found === undefined) {
-				throw new Error(`Missing toolbar button: ${text}`);
-			}
-			return found;
-		};
-		button('Source').click();
-		const source = view.contentEl.querySelector<HTMLPreElement>(
-			'.html-document-viewer__source',
-		);
 		const iframe = view.contentEl.querySelector('iframe');
-		expect(source?.hidden).toBe(false);
-		expect(source?.textContent).toContain('<h1>Source text</h1>');
-		expect(iframe?.hidden).toBe(true);
-
-		button('+').click();
-		expect(iframe?.style.transform).toBe('scale(1.1)');
-		button('Open link').click();
-		await vi.waitFor(() => expect(leaf.openFile).toHaveBeenCalledWith(target));
-	});
-
-	it('reloads, prints, and copies safe diagnostics from parent-owned controls', async () => {
-		const { file, vault, view } = createView('<img src="missing.png">');
-		await view.onLoadFile(file as never);
-		const print = vi.spyOn(window, 'print').mockImplementation(() => {
-			expect(
-				document.body.classList.contains('html-document-viewer-is-printing'),
-			).toBe(true);
-			expect(
-				view.contentEl.classList.contains('html-document-viewer--printing'),
-			).toBe(true);
-		});
-		const writeText = vi.fn<(value: string) => Promise<void>>(
-			async () => undefined,
+		const prepared = new DOMParser().parseFromString(
+			iframe?.srcdoc ?? '',
+			'text/html',
 		);
-		Object.defineProperty(window.navigator, 'clipboard', {
-			configurable: true,
-			value: { writeText },
-		});
-		const buttons = Array.from(view.contentEl.querySelectorAll('button'));
-		const click = (text: string): void => {
-			const button = buttons.find((candidate) => candidate.textContent === text);
-			if (button === undefined) {
-				throw new Error(`Missing toolbar button: ${text}`);
-			}
-			button.click();
-		};
-
-		click('Reload');
-		await vi.waitFor(() => expect(vault.read).toHaveBeenCalledTimes(2));
-		click('Print');
-		expect(print).toHaveBeenCalledOnce();
-		expect(
-			document.body.classList.contains('html-document-viewer-is-printing'),
-		).toBe(false);
-		expect(
-			view.contentEl.classList.contains('html-document-viewer--printing'),
-		).toBe(false);
-		click('Copy diagnostics');
-		await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
-		expect(writeText.mock.calls[0]?.[0]).toContain('File: folder/index.html');
-		expect(writeText.mock.calls[0]?.[0]).toContain('Warnings: Image not found');
-	});
-
-	it('reports unavailable navigation and clipboard actions without interpreting text', async () => {
-		const { file, view } = createView('<a href="missing.html">Missing</a>');
-		await view.onLoadFile(file as never);
-		Object.defineProperty(window.navigator, 'clipboard', {
-			configurable: true,
-			value: undefined,
-		});
-		const buttons = Array.from(view.contentEl.querySelectorAll('button'));
-		buttons.find((button) => button.textContent === 'Open link')?.click();
-		const status = view.contentEl.querySelector<HTMLDivElement>(
-			'.html-document-viewer__status',
-		);
-		expect(status?.textContent).toBe(
-			'HTML document not found: “folder/missing.html”.',
-		);
-
-		buttons.find((button) => button.textContent === 'Copy diagnostics')?.click();
-		await vi.waitFor(() =>
-			expect(status?.textContent).toBe('Clipboard access is unavailable.'),
-		);
-		expect(status?.querySelector('*')).toBeNull();
+		expect(view.contentEl.querySelector('button, select, pre')).toBeNull();
+		expect(prepared.getElementById('document')?.hasAttribute('href')).toBe(false);
+		expect(prepared.getElementById('fragment')?.getAttribute('href')).toBe('#local');
 	});
 
 	it('refreshes only for the source or a tracked dependency', async () => {
@@ -372,7 +287,7 @@ describe('HtmlDocumentView behavior', () => {
 
 		expect(iframe?.hasAttribute('srcdoc')).toBe(false);
 		expect(iframe?.getAttribute('src')).toBe('about:blank');
-		expect(view.contentEl.querySelector('.html-document-viewer__toolbar')).not.toBeNull();
+		expect(view.contentEl.querySelector('button, select, pre')).toBeNull();
 	});
 
 	it('blanks and removes the frame on close', async () => {

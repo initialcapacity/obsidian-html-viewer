@@ -9,7 +9,6 @@ describe('vault path properties', () => {
 				const result = resolveVaultReference(
 					'documents/pages/index.html',
 					reference,
-					{ allowFragment: true },
 				);
 				if (result.ok) {
 					expect(result.path.startsWith('/')).toBe(false);

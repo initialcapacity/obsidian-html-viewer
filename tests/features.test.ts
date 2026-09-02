@@ -68,7 +68,7 @@ describe('viewer feature integration', () => {
 		expect(prepared.querySelector('img')?.getAttribute('sizes')).toBe('100vw');
 	});
 
-	it('exposes only normalized HTML links for parent-owned navigation', async () => {
+	it('keeps fragment links and removes every document-navigation link', async () => {
 		const result = await prepareHtmlWithAssets(
 			`<a id="fragment" href="#local">Local</a>
 			<a id="document" href="../other.html#section">Other page</a>
@@ -82,14 +82,9 @@ describe('viewer feature integration', () => {
 		);
 		const prepared = new DOMParser().parseFromString(result.html, 'text/html');
 
-		expect(result.navigation).toEqual([
-			{ fragment: 'section', label: 'Other page', path: 'docs/other.html' },
-		]);
 		expect(prepared.getElementById('fragment')?.getAttribute('href')).toBe('#local');
 		expect(prepared.getElementById('document')?.hasAttribute('href')).toBe(false);
-		expect(
-			prepared.getElementById('document')?.getAttribute('aria-disabled'),
-		).toBe('true');
+		expect(prepared.querySelector('[data-html-document-viewer-navigation]')).toBeNull();
 		expect(prepared.getElementById('remote')?.hasAttribute('href')).toBe(false);
 		expect(prepared.getElementById('escape')?.hasAttribute('href')).toBe(false);
 	});
