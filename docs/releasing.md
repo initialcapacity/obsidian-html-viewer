@@ -28,21 +28,27 @@ so an ordinary source commit cannot suppress validation by copying a trailer.
 
 ## Automated release path
 
-`.github/workflows/quality.yml` runs `npm ci`, lint, tests, strict type-checking,
-and the production build for pull requests.
+`.github/workflows/quality.yml` runs the complete check on the minimum supported
+Node.js 22 release and Node.js 24. Node.js 24 also runs the browser security
+suite in Chromium and WebKit. Checkouts do not persist Git credentials.
 
 `.github/workflows/release.yml` queues every user-authored `main` push in one
 serialized concurrency group. For each triggering source SHA, it:
 
-1. validates the unmodified source commit;
-2. finds an existing tagged release commit for that source SHA or computes
+1. checks out the unmodified source without persisted credentials in a
+   read-only job, installs the lockfile without dependency lifecycle scripts,
+   runs lint, minimum-API and current-API type checks, coverage, and the
+   production build, then runs the browser security suite;
+2. transfers only the validated `main.js` bundle to the publishing job through
+   a short-lived Actions artifact. The publishing job does not install npm
+   packages or run dependency lifecycle scripts;
+3. finds an existing tagged release commit for that source SHA or computes
    `patch = max(current UTC seconds, highest known patch + 1)`;
-3. updates `manifest.json`, `package.json`, `package-lock.json`, and
+4. updates `manifest.json`, `package.json`, `package-lock.json`, and
    `versions.json`, preserving published version history;
-4. creates a local marked release commit and annotated tag with no `v` prefix;
-5. checks out that exact local tag, repeats all validation, and creates a fresh
-   production build;
-6. only after those checks pass, atomically pushes the validated tag and a
+5. creates a local marked release commit and annotated tag with no `v` prefix,
+   checks out that exact commit, and verifies the three required assets;
+6. only after read-only validation passes, atomically pushes the tag and a
    non-force update to `main`, then restores the exact validated tag checkout;
 7. attests `main.js`, `manifest.json`, and `styles.css`;
 8. creates or safely finishes a published GitHub release with generated notes;
@@ -64,7 +70,7 @@ when repairing a known run.
 
 | Failure point | Persistent state | Safe recovery |
 | --- | --- | --- |
-| Install, lint, test, type-check, or build | No remote state; candidate commits and tags exist only in the disposable runner clone | Fix the source and push normally. No version, tag, or release was published. |
+| Install, lint, test, type-check, browser test, or build | No remote state; validation has only read-only repository permission | Fix the source and push normally. No version, tag, or release was published. |
 | Competing `main` update during push | None, because the main/tag push is atomic | The job fetches and retries up to three times while keeping the same release candidate. Re-run if contention continues. |
 | Version commit and tag pushed; attestation or release failed | Marked commit and annotated tag identify the source SHA and version | Re-run the same workflow. It reuses the tag and completes missing safe steps. |
 | Release exists with a missing required asset | Existing release and remaining assets | Re-run. The workflow compares existing assets and uploads only a missing asset. |

@@ -4,9 +4,14 @@ import { describe, expect, it } from 'vitest';
 import {
 	CONTENT_SECURITY_POLICY,
 	MAX_ASSET_REFERENCES,
+	MAX_DOM_DEPTH,
+	MAX_DOM_ELEMENTS,
 	MAX_HTML_SOURCE_CHARACTERS,
 	prepareHtml,
 } from '../src/prepare-html';
+
+const VALID_PNG_DATA_URL =
+	'data:image/png;base64,iVBORw0KGgoAAAAASUhEUgAAAAEAAAAB';
 
 const EXPECTED_CSP =
 	"default-src 'none'; " +
@@ -18,9 +23,9 @@ const EXPECTED_CSP =
 	"worker-src 'none'; " +
 	"form-action 'none'; " +
 	"base-uri 'none'; " +
-	'img-src data: blob:; ' +
-	"style-src 'unsafe-inline' data: blob:; " +
-	'font-src data: blob:; ' +
+	'img-src data:; ' +
+	"style-src 'unsafe-inline'; " +
+	"font-src 'none'; " +
 	"media-src 'none'; " +
 	"manifest-src 'none';";
 
@@ -106,7 +111,7 @@ describe('prepareHtml', () => {
 	it('strips special request attributes even when the primary URL is inert', () => {
 		const prepared = parsePrepared(`
 			<a href="#safe" attributionsrc="https://attacker.invalid/register">safe</a>
-			<img src="data:image/png;base64,AA==" attributionsrc="https://attacker.invalid/image" browsingtopics>
+			<img src="${VALID_PNG_DATA_URL}" attributionsrc="https://attacker.invalid/image" browsingtopics>
 		`);
 
 		for (const element of Array.from(prepared.querySelectorAll('*'))) {
@@ -200,23 +205,39 @@ describe('prepareHtml', () => {
 	it('removes SVG data images while preserving allowlisted raster MIME types', () => {
 		const prepared = parsePrepared(`
 			<img id="svg" src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=">
-			<img id="png" src="data:image/png;base64,iVBORw0KGgo=">
+			<img id="png" src="${VALID_PNG_DATA_URL}">
 		`);
 
 		expect(prepared.getElementById('svg')?.hasAttribute('src')).toBe(false);
 		expect(prepared.getElementById('png')?.getAttribute('src')).toBe(
-			'data:image/png;base64,iVBORw0KGgo=',
+			VALID_PNG_DATA_URL,
 		);
 	});
 
 	it('accepts line-wrapped base64 raster data images', () => {
 		const prepared = parsePrepared(
-			'<img src="data:image/png;base64,iVBO\nRw0K Ggo=">',
+			'<img src="data:image/png;base64,iVBO\nRw0KGgoAAAAASUhEUgAAAAEAAAAB">',
 		);
 
 		expect(prepared.querySelector('img')?.getAttribute('src')).toBe(
-			'data:image/png;base64,iVBO\nRw0K Ggo=',
+			'data:image/png;base64,iVBO\nRw0KGgoAAAAASUhEUgAAAAEAAAAB',
 		);
+	});
+
+	it('rejects malformed and over-dimensioned raster data images', () => {
+		const oversized = new Uint8Array(24);
+		oversized.set([137, 80, 78, 71, 13, 10, 26, 10], 0);
+		oversized.set([73, 72, 68, 82], 12);
+		new DataView(oversized.buffer).setUint32(16, 20_000);
+		new DataView(oversized.buffer).setUint32(20, 1);
+		const oversizedUrl = `data:image/png;base64,${Buffer.from(oversized).toString('base64')}`;
+		const prepared = parsePrepared(`
+			<img id="malformed" src="data:image/png;base64,AAAA">
+			<img id="oversized" src="${oversizedUrl}">
+		`);
+
+		expect(prepared.getElementById('malformed')?.hasAttribute('src')).toBe(false);
+		expect(prepared.getElementById('oversized')?.hasAttribute('src')).toBe(false);
 	});
 
 	it('bounds source size and authored asset-reference count', () => {
@@ -227,6 +248,17 @@ describe('prepareHtml', () => {
 			MAX_ASSET_REFERENCES + 1,
 		);
 		expect(() => prepareHtml(references)).toThrow('too many asset references');
+	});
+
+	it('bounds parsed DOM element count and nesting depth', () => {
+		expect(() =>
+			prepareHtml('<i></i>'.repeat(MAX_DOM_ELEMENTS + 1)),
+		).toThrow('too many elements');
+		expect(() =>
+			prepareHtml(
+				`${'<div>'.repeat(MAX_DOM_DEPTH + 1)}content${'</div>'.repeat(MAX_DOM_DEPTH + 1)}`,
+			),
+		).toThrow('nested too deeply');
 	});
 
 	it('uses browser error recovery for fragments and incomplete HTML', () => {

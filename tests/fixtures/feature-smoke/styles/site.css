@@ -1,0 +1,27 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  background: #f0fdf4;
+  color: #14532d;
+  margin: 0;
+  padding: 2rem;
+}
+
+main {
+  margin: 0 auto;
+  max-width: 48rem;
+}
+
+.external-proof {
+  background-image: url("../images/proof.png");
+  border: 8px solid #16a34a;
+  border-radius: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 1rem 0;
+  min-height: 4rem;
+  padding: 1rem 5rem 1rem 1rem;
+}

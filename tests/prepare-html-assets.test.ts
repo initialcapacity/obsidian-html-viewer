@@ -7,8 +7,14 @@ import type {
 	ImageAssetResult,
 	StylesheetAssetResult,
 } from '../src/asset-loader';
-import { SameFolderAssetLoader } from '../src/asset-loader';
-import { prepareHtmlWithAssets } from '../src/prepare-html';
+import { VaultAssetLoader } from '../src/asset-loader';
+import {
+	prepareHtmlWithAssets as prepareHtmlWithAssetsForPath,
+	type PrepareHtmlOptions,
+} from '../src/prepare-html';
+
+const VALID_PNG_DATA_URL =
+	'data:image/png;base64,iVBORw0KGgoAAAAASUhEUgAAAAEAAAAB';
 
 function parsePrepared(source: string): Document {
 	return new DOMParser().parseFromString(source, 'text/html');
@@ -21,6 +27,19 @@ function loader(
 	) => Promise<StylesheetAssetResult>,
 ): HtmlAssetLoader {
 	return { loadImage, loadStylesheet };
+}
+
+function prepareHtmlWithAssets(
+	source: string,
+	assetLoader: HtmlAssetLoader,
+	options?: PrepareHtmlOptions,
+) {
+	return prepareHtmlWithAssetsForPath(
+		source,
+		'folder/index.html',
+		assetLoader,
+		options,
+	);
 }
 
 describe('HTML preparation with vault assets', () => {
@@ -38,10 +57,10 @@ describe('HTML preparation with vault assets', () => {
 		);
 		const imageFile: TFile = {} as never;
 		const styleFile: TFile = {} as never;
-		const objectUrls = new Set<string>();
-		const assetLoader = new SameFolderAssetLoader(
+		const encodedImage = `data:image/png;base64,${imageBytes.toString('base64')}`;
+		const assetLoader = new VaultAssetLoader(
 			{
-				cachedRead: vi.fn(async (file) => {
+				read: vi.fn(async (file) => {
 					expect(file).toBe(styleFile);
 					return css;
 				}),
@@ -66,25 +85,28 @@ describe('HTML preparation with vault assets', () => {
 					new Uint8Array([0x50, 0x4e, 0x47]),
 				);
 				expect(mimeType).toBe('image/png');
-				return 'blob:fixture-image';
+				return encodedImage;
 			},
-			objectUrls,
 		);
 
 		const result = await prepareHtmlWithAssets(html, assetLoader);
 		const prepared = parsePrepared(result.html);
-		expect(result.warnings).toEqual([]);
-		expect(objectUrls).toEqual(new Set(['blob:fixture-image']));
+		expect(result.warnings).toEqual([
+			'Blocked image reference “https://attacker.invalid/html-viewer-import.css”.',
+			'Blocked image reference “https://attacker.invalid/html-viewer-css-pixel.png”.',
+		]);
 		expect(prepared.querySelector('.asset-image')?.getAttribute('src')).toBe(
-			'blob:fixture-image',
+			encodedImage,
 		);
-		expect(prepared.querySelector('style')?.textContent).toBe(css);
+		expect(prepared.querySelector('style')?.textContent).toBe(
+			css.replaceAll(/url\("https:\/\/attacker[.]invalid\/[^"\n]+"\)/gu, 'url("")'),
+		);
 	});
 
 	it('rewrites a local image URL and inserts stylesheet text inertly', async () => {
 		const loadImage = vi.fn(async () => ({
 			ok: true as const,
-			url: 'blob:owned-image',
+			url: 'data:image/png;base64,AAAA',
 		}));
 		const loadStylesheet = vi.fn(async () => ({
 			css: 'body { color: rgb(12, 34, 56); }',
@@ -99,7 +121,7 @@ describe('HTML preparation with vault assets', () => {
 		expect(loadImage).toHaveBeenCalledWith('image.png');
 		expect(loadStylesheet).toHaveBeenCalledWith('style.css');
 		expect(prepared.querySelector('img')?.getAttribute('src')).toBe(
-			'blob:owned-image',
+			'data:image/png;base64,AAAA',
 		);
 		expect(
 			prepared.querySelector('img')?.hasAttribute(
@@ -116,14 +138,14 @@ describe('HTML preparation with vault assets', () => {
 	it('keeps data images without consulting the vault', async () => {
 		const loadImage = vi.fn();
 		const result = await prepareHtmlWithAssets(
-			'<img src="data:image/png;base64,iVBORw0KGgo=">',
+			`<img src="${VALID_PNG_DATA_URL}">`,
 			loader(loadImage, vi.fn()),
 		);
 
 		expect(loadImage).not.toHaveBeenCalled();
 		expect(
 			parsePrepared(result.html).querySelector('img')?.getAttribute('src'),
-		).toBe('data:image/png;base64,iVBORw0KGgo=');
+		).toBe(VALID_PNG_DATA_URL);
 	});
 
 	it('renders the rest of the document and exposes safe warnings after partial failures', async () => {
@@ -135,7 +157,7 @@ describe('HTML preparation with vault assets', () => {
 			loader(
 				async (reference) =>
 					reference === 'good.png'
-						? { ok: true, url: 'blob:good' }
+						? { ok: true, url: 'data:image/png;base64,AAAA' }
 						: {
 								message: 'Image not found: “missing.png”.',
 								ok: false,
@@ -152,7 +174,7 @@ describe('HTML preparation with vault assets', () => {
 
 		expect(prepared.querySelector('h1')?.textContent).toBe('Still visible');
 		expect(prepared.getElementById('good')?.getAttribute('src')).toBe(
-			'blob:good',
+			'data:image/png;base64,AAAA',
 		);
 		expect(prepared.getElementById('missing')?.hasAttribute('src')).toBe(false);
 		expect(prepared.getElementById('missing')?.getAttribute('alt')).toBe(
@@ -187,12 +209,22 @@ describe('HTML preparation with vault assets', () => {
 			'@import url("https://attacker.invalid/import.css"); body { background: url(https://attacker.invalid/pixel.png); }';
 		const result = await prepareHtmlWithAssets(
 			'<link rel="stylesheet" href="style.css">',
-			loader(vi.fn(), async () => ({ css, ok: true })),
+			loader(
+				async (reference) => ({
+					message: `Blocked image reference “${reference}”.`,
+					ok: false,
+					reason: 'invalid-path',
+				}),
+				async () => ({ css, ok: true }),
+			),
 		);
 		const prepared = parsePrepared(result.html);
 
 		expect(prepared.querySelector('link')).toBeNull();
-		expect(prepared.querySelector('style')?.textContent).toBe(css);
+		expect(prepared.querySelector('style')?.textContent).not.toContain(
+			'attacker.invalid',
+		);
+		expect(result.warnings).toHaveLength(2);
 		expect(
 			prepared.head.firstElementChild?.getAttribute('content'),
 		).toContain("default-src 'none'");
@@ -241,7 +273,7 @@ describe('HTML preparation with vault assets', () => {
 		const controller = new AbortController();
 		const loadImage = vi.fn(async () => {
 			controller.abort();
-			return { ok: true as const, url: 'blob:first' };
+			return { ok: true as const, url: 'data:image/png;base64,AAAA' };
 		});
 		const loadStylesheet = vi.fn();
 

@@ -42,6 +42,8 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | `aaef36e` | 0.0.1788311102 Community build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `mathml.html`, `css-raw-text.html`, and `failures.html` | Invalid regression attempt; fixed bundle absent | The maintainer confirmed the displayed version and force-quit Obsidian, but none of the new expectations appeared. Artifact comparison then proved the approved vault had the published `main.js` (`46260bd8…`, excluding Obsidian's suffix) and `styles.css` (`412cc11a…`), not the fixed working-tree artifacts (`52aa33bf…` and `173d6e9d…`). The shared manifest hash and version therefore did not prove runtime parity. The observed mobile behavior is consistent with those public assets; the fixed source requires a new release before this regression can be evaluated. |
 | 2026-09-01 | `bf72360` | 0.0.1788317389 | N/A | GitHub-hosted Ubuntu runner | Hardened pre-push release workflow and published artifact verification | Pass | Source and exact tagged-release lint, all 132 tests, strict type-check, production build, required-asset checks, atomic main/tag push, provenance generation, release publication, and final remote verification all passed. Published `main.js` (`52aa33bf…`) and `styles.css` (`173d6e9d…`) matched the desktop-tested fixed build exactly. |
 | 2026-09-01 | `bf72360` | 0.0.1788317389 Community build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `mathml.html`, `css-raw-text.html`, and `failures.html` | Pass, maintainer-observed | After installing the new Community release and force-quitting Obsidian, the maintainer validated all three regressions: native static MathML rendered, raw CSS child/nested selectors and generated content rendered correctly, and the resource-warning banner remained readable above rather than over the surviving document content. |
+| 2026-09-02 | Working tree based on `5c330d0` | 0.0.1788317881 local build | N/A | Node.js 26.7.0 on macOS 26.6.2; Chromium and WebKit | Dependency update, release-credential isolation, feature, compatibility, coverage, and browser security suites | Pass | ESLint reported 0 findings. Vitest passed 19 files and 165 tests with 91.33% line and 81.56% branch coverage. Current and minimum Obsidian API type checks and the production build passed. Playwright proved in both engines that hostile prepared HTML made zero server requests, executed no script, opened no popup, and did not navigate. `npm audit --audit-level=low` reported 0 vulnerabilities. |
+| 2026-09-02 | Working tree based on `5c330d0` | 0.0.1788317881 local build | 1.13.7 | macOS 26.6.2 desktop | Packaged feature, security, refresh, split-pane, print, and lifecycle smoke test | Pass after three live regressions were found and fixed | Nested linked CSS, inline and linked-CSS image paths, responsive image markup, source/preview, 100–110% zoom and reset, safe relative navigation, missing-target warnings, diagnostics copy, native Print dialog, MathML, and `.htm` all worked. The smoke test found author CSS overriding `hidden`, opaque-sandbox printing, and stale cached reads; regression tests now cover visibility and fresh reads, and the secure parent-owned print path opened the native dialog. Same-size green→purple→green stylesheet changes committed into both open panes. The hostile fixture showed the no-script success marker, no popup or navigation, and zero `attacker.invalid` requests in a cleared filtered Network panel. Disabling removed every viewer root and detached the HTML leaf; re-enabling loaded the plugin and reopened the fixture. Final automated verification passed 20 files and 168 tests, both browser security runs, the production build, and an audit with 0 vulnerabilities. |
 
 ## Automated security coverage
 
@@ -61,23 +63,33 @@ The unit suite must verify all of the following before a manual install:
 - no HTML-string insertion API in runtime source;
 - no Node.js, Electron, or network API in runtime source; and
 - consistent fixed identity/version metadata;
-- strict same-folder asset path resolution, including encoded and Unicode input;
-- raster-image MIME allowlisting and isolated missing/unsupported failures; and
+- property-tested relative vault path resolution, including nested, parent,
+  encoded, Unicode, absolute, scheme, and vault-escaping input;
+- raster-image MIME, magic-byte, dimension, and decoded-pixel validation for
+  PNG, GIF, JPEG, WebP, and AVIF, plus isolated missing/unsupported failures;
 - safe stylesheet adoption without source-text HTML interpolation;
 - stylesheet media, title, disabled, and alternate semantics;
+- responsive `srcset`, `<picture>`, inline CSS image URLs, and linked-stylesheet
+  image URLs resolved relative to the correct vault file;
+- safe parent-owned relative HTML navigation and source/preview, zoom, reload,
+  print, and diagnostic controls;
+- fixed DOM element-count and nesting-depth limits;
 - fixed source, reference, per-asset, aggregate-byte, and embedded-output limits;
 - deduplicated asset reads and abort propagation through stale render work; and
 - behavioral view integration for srcdoc commit, warnings, stale reads, and
-  close cleanup.
+  close cleanup;
+- plugin registration and complete disable cleanup; and
+- read-only dependency installation separated from release write credentials,
+  immutable action pins, and non-persisted checkout credentials.
 
 The lifecycle suite also verifies:
 
 - a 150 ms refresh debounce with one callback for a rapid burst;
 - stale-render invalidation before asynchronous work can commit;
-- object-URL revocation on replacement, failure, supersession, and reset;
 - refresh and layout-timer cancellation during view cleanup;
-- current-file and same-folder create/modify/delete/rename relevance;
-- rejection of changes in unrelated and nested folders; and
+- exact current-file and tracked-dependency create/modify/delete/rename
+  relevance, including old rename paths;
+- rejection of unrelated vault changes; and
 - isolation between two independent view-state coordinators.
 
 ## Desktop manual procedure
@@ -114,10 +126,11 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-No manual verification remains for the implemented milestones. Release
-`0.0.1788317389` passed the recorded desktop checks, the same three regression
-fixtures on the recorded iPhone, and an operational GitHub-hosted run of the
-reordered release workflow.
+The original milestones remain manually verified by release `0.0.1788317389`.
+The new nested-asset, responsive-image, toolbar, printing, and parent-owned
+navigation features now have automated and packaged desktop coverage. They still
+need the focused mobile Obsidian smoke test before release sign-off. The revised
+two-job release workflow also needs one operational GitHub-hosted run.
 
 ## Asset representation deviation
 

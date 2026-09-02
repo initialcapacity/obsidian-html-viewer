@@ -4,7 +4,7 @@
 
 Build, test, release, and publish a simple, robust Obsidian community plugin that displays static HTML documents stored in an Obsidian vault.
 
-The plugin is a read-only viewer. It must render ordinary static HTML while treating every HTML file as untrusted content. Scripts must not run, resources outside the vault must not load, and the document must never be inserted into Obsidian's own DOM.
+The plugin is a read-only viewer. It must render ordinary static HTML while treating every HTML file as untrusted content. Scripts must not run, resources outside the vault must not load, and document markup must never be interpreted in Obsidian's own DOM. An explicitly requested source view may place the original source in a parent-owned element only as plain `textContent`.
 
 This specification is written for a Codex implementation agent. Work through the milestones in order, keep the repository usable after every milestone, and do not claim a milestone is complete without satisfying its acceptance criteria.
 
@@ -49,6 +49,33 @@ The project is licensed under the MIT License. Add the standard MIT `LICENSE` te
 - Settings whose only purpose would be to weaken the security model.
 
 Do not add speculative features. If a requirement would expand these boundaries, document it for a later release instead of quietly broadening the plugin.
+
+### Approved post-v1 extensions
+
+The first-public-version boundaries above remain the historical baseline. The
+current runtime also implements these reviewed extensions without weakening the
+empty iframe sandbox or no-network policy:
+
+- Relative raster images and stylesheets may use nested or parent paths as long
+  as normalization remains inside the vault.
+- Raster `url(...)` values in inline and linked CSS, plus `srcset` and
+  `<picture>` sources, use the same vault-only loader and fixed resource budget.
+- Raster bytes must match their extension-selected MIME signature and stay
+  within decoded dimension and pixel-count limits before being embedded as
+  base64 data URLs.
+- Relative `.html` and `.htm` links are removed from the frame and exposed as
+  parent-owned navigation controls. The frame itself remains unable to
+  navigate.
+- Parent-owned controls provide reload, plain-text source/preview, bounded zoom,
+  print, and safe diagnostic copying.
+- Refresh is based on the exact dependency paths collected during preparation,
+  not every file in the source folder.
+- Parsing has explicit source-size, DOM element-count, and nesting-depth limits.
+
+The base64 representation supersedes the original blob-URL preference below.
+Real Obsidian testing showed that an empty-sandbox `srcdoc` frame has an opaque
+origin and cannot load a parent-origin `blob:app://…` resource. The security
+rationale and regression evidence are recorded in `docs/testing.md`.
 
 ## 4. Technical architecture
 

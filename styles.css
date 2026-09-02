@@ -13,10 +13,69 @@
 	background: #fff;
 	border: 0;
 	display: block;
-	flex: 1 1 auto;
 	height: 100%;
+	left: 0;
+	position: absolute;
+	top: 0;
+	transform-origin: top left;
+	width: 100%;
+}
+
+.html-document-viewer__viewport {
+	flex: 1 1 auto;
 	min-height: 0;
 	min-width: 0;
+	overflow: hidden;
+	position: relative;
+}
+
+.html-document-viewer__toolbar {
+	align-items: center;
+	background: var(--background-secondary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	padding: var(--size-2-2) var(--size-4-2);
+	position: relative;
+	z-index: 2;
+}
+
+.html-document-viewer__toolbar button,
+.html-document-viewer__toolbar select {
+	font-size: var(--font-ui-smaller);
+}
+
+.html-document-viewer__links {
+	display: flex;
+	flex: 1 1 16rem;
+	gap: var(--size-2-2);
+	justify-content: flex-end;
+	min-width: 0;
+}
+
+.html-document-viewer__frame[hidden],
+.html-document-viewer__links[hidden],
+.html-document-viewer__source[hidden] {
+	display: none;
+}
+
+.html-document-viewer__links select {
+	max-width: 24rem;
+	min-width: 8rem;
+}
+
+.html-document-viewer__source {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	height: 100%;
+	inset: 0;
+	margin: 0;
+	overflow: auto;
+	padding: var(--size-4-4);
+	position: absolute;
+	white-space: pre-wrap;
 	width: 100%;
 }
 
@@ -32,6 +91,37 @@
 	text-align: center;
 	width: 100%;
 	z-index: 1;
+}
+
+@media print {
+	body.html-document-viewer-is-printing * {
+		visibility: hidden;
+	}
+
+	body.html-document-viewer-is-printing .html-document-viewer--printing,
+	body.html-document-viewer-is-printing .html-document-viewer--printing * {
+		visibility: visible;
+	}
+
+	.html-document-viewer--printing {
+		height: 100vh;
+		inset: 0;
+		position: fixed;
+		width: 100vw;
+	}
+
+	.html-document-viewer__toolbar,
+	.html-document-viewer__status,
+	.html-document-viewer__source {
+		display: none;
+	}
+
+	.html-document-viewer--printing .html-document-viewer__frame {
+		display: block;
+		height: 100%;
+		transform: none !important;
+		width: 100%;
+	}
 }
 
 .html-document-viewer__status[hidden] {

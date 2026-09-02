@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HTML Viewer Feature Smoke</title>
+  <link rel="stylesheet" href="../styles/site.css">
+  <style>
+    .inline-proof {
+      background-image: url("../images/proof.png");
+      background-position: right 1rem center;
+      background-repeat: no-repeat;
+      background-size: 3rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Feature smoke: nested assets</h1>
+    <p id="version">Fixture version 1</p>
+    <section class="external-proof inline-proof">
+      Linked CSS and both CSS image paths loaded.
+    </section>
+    <picture>
+      <source srcset="../images/proof.png 1x, ../images/proof.png 2x" type="image/png">
+      <img
+        alt="Nested green proof square"
+        height="96"
+        sizes="96px"
+        src="../images/proof.png"
+        srcset="../images/proof.png 96w, ../images/proof.png 192w"
+        width="96"
+      >
+    </picture>
+    <p><a href="next.html#target">Open the navigation target</a></p>
+    <p><a href="missing.html">Missing navigation target</a></p>
+  </main>
+</body>
+</html>

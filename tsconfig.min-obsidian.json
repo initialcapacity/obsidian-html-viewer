@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "obsidian": ["node_modules/obsidian-min-api"]
+    },
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

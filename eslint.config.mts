@@ -47,7 +47,9 @@ export default defineConfig(
 		files: ['tests/**/*.ts'],
 		rules: {
 			// Tests run under Node.js; no Node APIs are bundled into the plugin.
+			'obsidianmd/no-global-this': 'off',
 			'obsidianmd/no-nodejs-modules': 'off',
+			'obsidianmd/no-tfile-tfolder-cast': 'off',
 		},
 	},
 );

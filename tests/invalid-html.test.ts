@@ -5,8 +5,16 @@ import type { HtmlAssetLoader } from '../src/asset-loader';
 import {
 	CONTENT_SECURITY_POLICY,
 	prepareHtml,
-	prepareHtmlWithAssets,
+	prepareHtmlWithAssets as prepareHtmlWithAssetsForPath,
 } from '../src/prepare-html';
+
+function prepareHtmlWithAssets(source: string, assetLoader: HtmlAssetLoader) {
+	return prepareHtmlWithAssetsForPath(
+		source,
+		'invalid/index.html',
+		assetLoader,
+	);
+}
 
 function fixture(name: string): string {
 	return readFileSync(resolve('tests', 'fixtures', 'invalid', name), 'utf8');

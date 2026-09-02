@@ -2,21 +2,34 @@ import type { TFile } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 import {
 	MAX_ASSET_REFERENCE_LENGTH,
-	SameFolderAssetLoader,
-	resolveSameFolderAssetPath,
+	VaultAssetLoader,
+	resolveAssetPath,
 } from '../src/asset-loader';
 import { getRasterMimeType, isCssPath } from '../src/mime';
 
-describe('same-folder path resolution', () => {
+function validPng(width = 1, height = 1): ArrayBuffer {
+	const bytes = new Uint8Array(24);
+	bytes.set([137, 80, 78, 71, 13, 10, 26, 10], 0);
+	bytes.set([73, 72, 68, 82], 12);
+	const view = new DataView(bytes.buffer);
+	view.setUint32(16, width);
+	view.setUint32(20, height);
+	return bytes.buffer;
+}
+
+describe('vault-relative path resolution', () => {
 	it.each([
 		['plain file', 'folder/index.html', 'image.png', 'folder/image.png'],
 		['one leading dot segment', 'folder/index.html', './image.png', 'folder/image.png'],
+		['nested path', 'folder/index.html', 'images/image.png', 'folder/images/image.png'],
+		['parent path within the vault', 'folder/index.html', '../image.png', 'image.png'],
 		['root file', 'index.html', 'image.png', 'image.png'],
 		['Unicode file', 'folder/index.html', 'café.png', 'folder/café.png'],
 		['encoded Unicode file', 'folder/index.html', 'caf%C3%A9.png', 'folder/café.png'],
 	])('accepts %s', (_label, documentPath, reference, expectedPath) => {
-		expect(resolveSameFolderAssetPath(documentPath, reference)).toEqual({
+		expect(resolveAssetPath(documentPath, reference)).toEqual({
 			fileName: expectedPath.slice(expectedPath.lastIndexOf('/') + 1),
+			fragment: null,
 			ok: true,
 			path: expectedPath,
 		});
@@ -26,10 +39,9 @@ describe('same-folder path resolution', () => {
 		['empty', ''],
 		['absolute', '/absolute.png'],
 		['protocol relative', '//attacker.invalid/image.png'],
-		['parent traversal', '../secret.png'],
+		['vault escape', '../../secret.png'],
 		['encoded traversal', '%2e%2e%2fsecret.png'],
 		['encoded slash', 'nested%2Fimage.png'],
-		['nested path', 'nested/image.png'],
 		['backslash', 'nested\\image.png'],
 		['encoded backslash', 'nested%5Cimage.png'],
 		['HTTP', 'https://attacker.invalid/image.png'],
@@ -42,11 +54,10 @@ describe('same-folder path resolution', () => {
 		['null byte', 'image.png\0.css'],
 		['encoded null byte', 'image.png%00.css'],
 		['malformed percent encoding', 'image%ZZ.png'],
-		['two dot prefixes', './../image.png'],
 		['overlong reference', `${'a'.repeat(MAX_ASSET_REFERENCE_LENGTH)}.png`],
 	])('rejects %s', (_label, reference) => {
 		expect(
-			resolveSameFolderAssetPath('folder/index.html', reference),
+			resolveAssetPath('folder/index.html', reference),
 		).toEqual({ ok: false, reason: 'invalid-path' });
 	});
 });
@@ -77,71 +88,67 @@ describe('MIME allowlist', () => {
 	});
 });
 
-describe('same-folder asset loading', () => {
+describe('vault-relative asset loading', () => {
 	const testFile: TFile = {} as never;
 
-	it('loads raster bytes with the allowlisted MIME and tracks the blob URL', async () => {
-		const data = new ArrayBuffer(4);
-		const objectUrls = new Set<string>();
+	it('validates and loads raster bytes while tracking the dependency', async () => {
+			const data = validPng();
 		const getFileByPath = vi.fn(() => testFile);
 		const readBinary = vi.fn(async () => data);
-		const createObjectUrl = vi.fn(() => 'blob:owned-image');
-		const loader = new SameFolderAssetLoader(
+			const createImageUrl = vi.fn(() => 'data:image/png;base64,AAAA');
+		const loader = new VaultAssetLoader(
 			{
-				cachedRead: vi.fn(),
+				read: vi.fn(),
 				getFileByPath,
 				readBinary,
 			},
 			'folder/index.html',
-			createObjectUrl,
-			objectUrls,
+				createImageUrl,
 		);
 
 		await expect(loader.loadImage('./image.PNG')).resolves.toEqual({
 			ok: true,
-			url: 'blob:owned-image',
+				url: 'data:image/png;base64,AAAA',
 		});
 		expect(getFileByPath).toHaveBeenCalledWith('folder/image.PNG');
 		expect(readBinary).toHaveBeenCalledWith(testFile);
-		expect(createObjectUrl).toHaveBeenCalledWith(data, 'image/png');
-		expect(objectUrls).toEqual(new Set(['blob:owned-image']));
-	});
+			expect(createImageUrl).toHaveBeenCalledWith(data, 'image/png');
+			expect(loader.getDependencies()).toEqual(new Set(['folder/image.PNG']));
+		});
 
-	it('loads same-folder CSS as text without creating an object URL', async () => {
-		const objectUrls = new Set<string>();
-		const cachedRead = vi.fn(async () => 'body { color: rebeccapurple; }');
-		const loader = new SameFolderAssetLoader(
+		it('loads vault-relative CSS as text', async () => {
+		const read = vi.fn(async () => 'body { color: rebeccapurple; }');
+		const loader = new VaultAssetLoader(
 			{
-				cachedRead,
+				read,
 				getFileByPath: vi.fn(() => testFile),
 				readBinary: vi.fn(),
 			},
-			'folder/index.html',
-			vi.fn(),
-			objectUrls,
+				'folder/index.html',
+				vi.fn(),
 		);
 
 		await expect(loader.loadStylesheet('style.css')).resolves.toEqual({
 			css: 'body { color: rebeccapurple; }',
 			ok: true,
+			path: 'folder/style.css',
 		});
-		expect(cachedRead).toHaveBeenCalledWith(testFile);
-		expect(objectUrls).toHaveLength(0);
+		expect(read).toHaveBeenCalledWith(testFile);
+			expect(loader.getDependencies()).toEqual(new Set(['folder/style.css']));
 	});
 
 	it('deduplicates equivalent image and stylesheet reads', async () => {
-		const readBinary = vi.fn(async () => new ArrayBuffer(4));
-		const cachedRead = vi.fn(async () => 'body { color: green; }');
-		const createImageUrl = vi.fn(() => 'blob:deduplicated');
-		const loader = new SameFolderAssetLoader(
+			const readBinary = vi.fn(async () => validPng());
+		const read = vi.fn(async () => 'body { color: green; }');
+			const createImageUrl = vi.fn(() => 'data:image/png;base64,AAAA');
+		const loader = new VaultAssetLoader(
 			{
-				cachedRead,
+				read,
 				getFileByPath: vi.fn(() => testFile),
 				readBinary,
 			},
 			'folder/index.html',
-			createImageUrl,
-			new Set(),
+				createImageUrl,
 		);
 
 		await Promise.all([
@@ -153,16 +160,16 @@ describe('same-folder asset loading', () => {
 
 		expect(readBinary).toHaveBeenCalledOnce();
 		expect(createImageUrl).toHaveBeenCalledOnce();
-		expect(cachedRead).toHaveBeenCalledOnce();
+		expect(read).toHaveBeenCalledOnce();
 	});
 
 	it('enforces per-asset and aggregate byte limits', async () => {
 		const firstImage: TFile = {} as never;
 		const secondImage: TFile = {} as never;
 		const stylesheet: TFile = {} as never;
-		const loader = new SameFolderAssetLoader(
+		const loader = new VaultAssetLoader(
 			{
-				cachedRead: vi.fn(async () => '12345'),
+				read: vi.fn(async () => '12345'),
 				getFileByPath: vi.fn((path: string) =>
 					path.endsWith('first.png')
 						? firstImage
@@ -170,15 +177,14 @@ describe('same-folder asset loading', () => {
 							? secondImage
 							: stylesheet,
 				),
-				readBinary: vi.fn(async () => new ArrayBuffer(3)),
+				readBinary: vi.fn(async () => validPng()),
 			},
 			'folder/index.html',
-			vi.fn(() => 'blob:bounded'),
-			new Set(),
-			{
-				maxImageBytes: 4,
-				maxStylesheetBytes: 4,
-				maxTotalBytes: 5,
+				vi.fn(() => 'data:image/png;base64,AAAA'),
+				{
+					maxImageBytes: 24,
+					maxStylesheetBytes: 24,
+					maxTotalBytes: 28,
 			},
 		);
 
@@ -204,45 +210,43 @@ describe('same-folder asset loading', () => {
 					finishRead = resolveRead;
 				}),
 		);
-		const createImageUrl = vi.fn(() => 'blob:should-not-exist');
-		const loader = new SameFolderAssetLoader(
+			const createImageUrl = vi.fn(() => 'data:image/png;base64,AAAA');
+		const loader = new VaultAssetLoader(
 			{
-				cachedRead: vi.fn(),
+				read: vi.fn(),
 				getFileByPath: vi.fn(() => testFile),
 				readBinary,
 			},
 			'folder/index.html',
-			createImageUrl,
-			new Set(),
+				createImageUrl,
 		);
 		const pending = loader.loadImage('image.png', {
 			signal: controller.signal,
 		});
 
 		controller.abort();
-		finishRead?.(new ArrayBuffer(4));
+			finishRead?.(validPng());
 
 		await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
 		expect(createImageUrl).not.toHaveBeenCalled();
 	});
 
 	it('rejects an oversized asset from vault metadata before reading it', async () => {
-		const oversizedFile: TFile = { stat: { size: 5 } } as never;
+			const oversizedFile: TFile = { stat: { size: 25 } } as never;
 		const readBinary = vi.fn();
-		const cachedRead = vi.fn();
-		const loader = new SameFolderAssetLoader(
+		const read = vi.fn();
+		const loader = new VaultAssetLoader(
 			{
-				cachedRead,
+				read,
 				getFileByPath: vi.fn(() => oversizedFile),
 				readBinary,
 			},
-			'folder/index.html',
-			vi.fn(),
-			new Set(),
-			{
-				maxImageBytes: 4,
-				maxStylesheetBytes: 4,
-				maxTotalBytes: 8,
+				'folder/index.html',
+				vi.fn(),
+				{
+					maxImageBytes: 24,
+					maxStylesheetBytes: 24,
+					maxTotalBytes: 48,
 			},
 		);
 
@@ -255,13 +259,13 @@ describe('same-folder asset loading', () => {
 			reason: 'too-large',
 		});
 		expect(readBinary).not.toHaveBeenCalled();
-		expect(cachedRead).not.toHaveBeenCalled();
+		expect(read).not.toHaveBeenCalled();
 	});
 
 	it('classifies invalid, unsupported, missing, and unreadable assets safely', async () => {
-		const loader = new SameFolderAssetLoader(
+		const loader = new VaultAssetLoader(
 			{
-				cachedRead: vi.fn(async () => {
+				read: vi.fn(async () => {
 					throw new Error('unreadable');
 				}),
 				getFileByPath: vi.fn((path: string) =>
@@ -271,12 +275,11 @@ describe('same-folder asset loading', () => {
 					throw new Error('unreadable');
 				}),
 			},
-			'folder/index.html',
-			vi.fn(),
-			new Set(),
+				'folder/index.html',
+				vi.fn(),
 		);
 
-		await expect(loader.loadImage('../secret.png')).resolves.toMatchObject({
+		await expect(loader.loadImage('../../secret.png')).resolves.toMatchObject({
 			ok: false,
 			reason: 'invalid-path',
 		});

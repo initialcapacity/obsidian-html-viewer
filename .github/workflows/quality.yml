@@ -12,29 +12,33 @@ concurrency:
 
 jobs:
   check:
-    name: Lint, test, type-check, and build
+    name: Check on Node.js ${{ matrix.node-version }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['22.22.0', '24']
     steps:
       - name: Check out the pull request
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
-      - name: Use Node.js 24
+      - name: Use supported Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Install dependencies from the lockfile
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      - name: Lint
-        run: npm run lint
+      - name: Run lint, compatibility checks, coverage, and build
+        run: npm run check
 
-      - name: Test
-        run: npm test
+      - name: Install browser engines
+        if: matrix.node-version == '24'
+        run: npx playwright install --with-deps chromium webkit
 
-      - name: Type-check
-        run: npm run typecheck
-
-      - name: Build production bundle
-        run: npm run build
+      - name: Run browser security tests
+        if: matrix.node-version == '24'
+        run: npm run test:e2e

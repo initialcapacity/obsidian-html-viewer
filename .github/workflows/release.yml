@@ -16,21 +16,19 @@ concurrency:
   queue: max
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
-  release:
-    name: Validate and publish one source release
+  validate:
+    name: Validate the source with read-only credentials
     runs-on: ubuntu-latest
     env:
       SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
     steps:
-      - name: Check out the triggering source with full history
+      - name: Check out the triggering source without persisted credentials
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          fetch-depth: 0
+          persist-credentials: false
           ref: ${{ env.SOURCE_SHA }}
 
       - name: Use Node.js 24
@@ -39,20 +37,48 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install source dependencies from the lockfile
-        run: npm ci
+      - name: Install dependencies from the lockfile
+        run: npm ci --ignore-scripts
 
-      - name: Lint source
-        run: npm run lint
+      - name: Run the complete source check
+        run: npm run check
 
-      - name: Test source
-        run: npm test
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
 
-      - name: Type-check source
-        run: npm run typecheck
+      - name: Run browser security tests
+        run: npm run test:e2e
 
-      - name: Build source production bundle
-        run: npm run build
+      - name: Upload the validated runtime bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          if-no-files-found: error
+          name: validated-runtime-${{ env.SOURCE_SHA }}
+          path: main.js
+          retention-days: 1
+
+  release:
+    name: Publish one validated source release
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+    steps:
+      - name: Check out the triggering source without persisted credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
 
       - name: Prepare the release candidate locally
         id: release
@@ -62,7 +88,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           now_seconds="$(date -u +%s)"
-          git fetch --prune --tags origin \
+          git fetch --prune --tags "https://github.com/$GITHUB_REPOSITORY.git" \
             "+refs/heads/main:refs/remotes/origin/main"
           result="$(node scripts/prepare-release.mjs \
             --source "$SOURCE_SHA" \
@@ -78,26 +104,17 @@ jobs:
           echo "release_commit=$release_commit" >> "$GITHUB_OUTPUT"
           git checkout --detach "$release_commit"
 
-      - name: Install release dependencies from the lockfile
-        run: npm ci
-
-      - name: Re-run lint on release metadata
-        run: npm run lint
-
-      - name: Re-run tests on release metadata
-        run: npm test
-
-      - name: Re-run type-check on release metadata
-        run: npm run typecheck
-
-      - name: Build fresh release assets
-        run: npm run build
+      - name: Download the validated runtime bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: validated-runtime-${{ env.SOURCE_SHA }}
 
       - name: Verify required release assets
         run: test -f main.js && test -f manifest.json && test -f styles.css
 
       - name: Atomically push the validated release commit and tag
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
           VERSION: ${{ steps.release.outputs.version }}
         shell: bash
@@ -106,7 +123,8 @@ jobs:
           now_seconds="$(date -u +%s)"
 
           for attempt in 1 2 3; do
-            git fetch --prune --tags origin \
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $GH_TOKEN" \
+              fetch --prune --tags origin \
               "+refs/heads/main:refs/remotes/origin/main"
             result="$(node scripts/prepare-release.mjs \
               --source "$SOURCE_SHA" \
@@ -123,7 +141,8 @@ jobs:
 
             test "$version" = "$VERSION"
             test "$release_commit" = "$RELEASE_COMMIT"
-            if git push --atomic origin \
+            if git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $GH_TOKEN" \
+              push --atomic origin \
               "$main_commit:refs/heads/main" \
               "refs/tags/$version:refs/tags/$version"; then
               git checkout --detach "$RELEASE_COMMIT"
@@ -220,7 +239,8 @@ jobs:
           gh attestation verify manifest.json --repo "$GITHUB_REPOSITORY"
           gh attestation verify styles.css --repo "$GITHUB_REPOSITORY"
 
-          git fetch origin "+refs/heads/main:refs/remotes/origin/main"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $GH_TOKEN" \
+            fetch origin "+refs/heads/main:refs/remotes/origin/main"
           head_version="$(git show refs/remotes/origin/main:manifest.json | \
             jq -r '.version')"
           test "$(gh release view "$head_version" --json isDraft --jq '.isDraft')" = "false"

@@ -1,9 +1,19 @@
 import type { TFile, Vault } from 'obsidian';
-import { getRasterMimeType, isCssPath } from './mime';
+import { validateRasterImage } from './image-validation';
+import {
+	getRasterMimeType,
+	isCssPath,
+	type RasterMimeType,
+} from './mime';
 import {
 	isRenderAborted,
 	throwIfRenderAborted,
 } from './render-abort';
+import {
+	resolveVaultReference,
+	type RejectedVaultReference,
+	type ResolvedVaultReference,
+} from './vault-path';
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_STYLESHEET_BYTES = 1024 * 1024;
@@ -11,6 +21,7 @@ export const MAX_TOTAL_ASSET_BYTES = 25 * 1024 * 1024;
 export const MAX_ASSET_REFERENCE_LENGTH = 512;
 
 export type AssetFailureReason =
+	| 'invalid-data'
 	| 'invalid-path'
 	| 'missing'
 	| 'read-failed'
@@ -31,12 +42,14 @@ export interface ImageAssetSuccess {
 export interface StylesheetAssetSuccess {
 	css: string;
 	ok: true;
+	path?: string;
 }
 
 export type ImageAssetResult = AssetFailure | ImageAssetSuccess;
 export type StylesheetAssetResult = AssetFailure | StylesheetAssetSuccess;
 
 export interface AssetLoadOptions {
+	basePath?: string;
 	signal?: AbortSignal;
 }
 
@@ -47,6 +60,7 @@ export interface AssetLoadLimits {
 }
 
 export interface HtmlAssetLoader {
+	getDependencies?(): ReadonlySet<string>;
 	loadImage(
 		reference: string,
 		options?: AssetLoadOptions,
@@ -57,25 +71,13 @@ export interface HtmlAssetLoader {
 	): Promise<StylesheetAssetResult>;
 }
 
-export interface ResolvedAssetPath {
-	fileName: string;
-	ok: true;
-	path: string;
-}
-
-export interface RejectedAssetPath {
-	ok: false;
-	reason: 'invalid-path';
-}
-
+export type ResolvedAssetPath = ResolvedVaultReference;
+export type RejectedAssetPath = RejectedVaultReference;
 export type AssetPathResult = RejectedAssetPath | ResolvedAssetPath;
 
-type AssetVault = Pick<
-	Vault,
-	'cachedRead' | 'getFileByPath' | 'readBinary'
->;
+type AssetVault = Pick<Vault, 'getFileByPath' | 'read' | 'readBinary'>;
 
-type ImageUrlCreator = (data: ArrayBuffer, mimeType: string) => string;
+type ImageUrlCreator = (data: ArrayBuffer, mimeType: RasterMimeType) => string;
 
 const DEFAULT_ASSET_LOAD_LIMITS: AssetLoadLimits = {
 	maxImageBytes: MAX_IMAGE_BYTES,
@@ -83,59 +85,13 @@ const DEFAULT_ASSET_LOAD_LIMITS: AssetLoadLimits = {
 	maxTotalBytes: MAX_TOTAL_ASSET_BYTES,
 };
 
-function parentPath(path: string): string {
-	const separator = path.lastIndexOf('/');
-	return separator === -1 ? '' : path.slice(0, separator);
-}
-
-function rejectedPath(): RejectedAssetPath {
-	return { ok: false, reason: 'invalid-path' };
-}
-
-export function resolveSameFolderAssetPath(
+export function resolveAssetPath(
 	documentPath: string,
 	authoredReference: string,
 ): AssetPathResult {
-	let reference = authoredReference.trim();
-	if (
-		reference.length === 0 ||
-		reference.length > MAX_ASSET_REFERENCE_LENGTH ||
-		reference.includes('\0')
-	) {
-		return rejectedPath();
-	}
-
-	try {
-		reference = decodeURIComponent(reference);
-	} catch {
-		return rejectedPath();
-	}
-
-	if (reference.startsWith('./')) {
-		reference = reference.slice(2);
-	}
-
-	if (
-		reference.length === 0 ||
-		reference.length > MAX_ASSET_REFERENCE_LENGTH ||
-		reference.includes('\0') ||
-		reference.includes('/') ||
-		reference.includes('\\') ||
-		reference.includes('?') ||
-		reference.includes('#') ||
-		reference === '.' ||
-		reference === '..' ||
-		/^[a-z][a-z\d+.-]*:/iu.test(reference)
-	) {
-		return rejectedPath();
-	}
-
-	const folder = parentPath(documentPath);
-	return {
-		fileName: reference,
-		ok: true,
-		path: folder.length === 0 ? reference : `${folder}/${reference}`,
-	};
+	return resolveVaultReference(documentPath, authoredReference, {
+		maxLength: MAX_ASSET_REFERENCE_LENGTH,
+	});
 }
 
 function displayReference(reference: string): string {
@@ -150,21 +106,33 @@ function failure(
 ): AssetFailure {
 	const displayed = displayReference(reference);
 	const label = kind === 'image' ? 'Image' : 'Stylesheet';
-	const message =
-		reason === 'invalid-path'
-			? `Blocked ${kind} reference “${displayed}”.`
-			: reason === 'unsupported-type'
-				? `Unsupported ${kind} type for “${displayed}”.`
-				: reason === 'too-large'
-					? `${label} is too large: “${displayed}”.`
-					: reason === 'missing'
-						? `${label} not found: “${displayed}”.`
-						: `Unable to read ${kind} “${displayed}”.`;
+	let message: string;
+	switch (reason) {
+		case 'invalid-path':
+			message = `Blocked ${kind} reference “${displayed}”.`;
+			break;
+		case 'invalid-data':
+			message = `Invalid or excessively large ${kind} data for “${displayed}”.`;
+			break;
+		case 'unsupported-type':
+			message = `Unsupported ${kind} type for “${displayed}”.`;
+			break;
+		case 'too-large':
+			message = `${label} is too large: “${displayed}”.`;
+			break;
+		case 'missing':
+			message = `${label} not found: “${displayed}”.`;
+			break;
+		case 'read-failed':
+			message = `Unable to read ${kind} “${displayed}”.`;
+			break;
+	}
 
 	return { message, ok: false, reason };
 }
 
-export class SameFolderAssetLoader implements HtmlAssetLoader {
+export class VaultAssetLoader implements HtmlAssetLoader {
+	private readonly dependencies = new Set<string>();
 	private readonly imageCache = new Map<string, Promise<ImageAssetResult>>();
 	private loadedBytes = 0;
 	private readonly stylesheetCache = new Map<
@@ -176,17 +144,20 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 		private readonly vault: AssetVault,
 		private readonly documentPath: string,
 		private readonly createImageUrl: ImageUrlCreator,
-		private readonly objectUrls: Set<string>,
 		private readonly limits: AssetLoadLimits = DEFAULT_ASSET_LOAD_LIMITS,
 	) {}
+
+	getDependencies(): ReadonlySet<string> {
+		return this.dependencies;
+	}
 
 	async loadImage(
 		reference: string,
 		options: AssetLoadOptions = {},
 	): Promise<ImageAssetResult> {
 		throwIfRenderAborted(options.signal);
-		const resolved = resolveSameFolderAssetPath(
-			this.documentPath,
+		const resolved = resolveAssetPath(
+			options.basePath ?? this.documentPath,
 			reference,
 		);
 		if (!resolved.ok) {
@@ -197,6 +168,7 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 		if (mimeType === null) {
 			return failure('unsupported-type', 'image', reference);
 		}
+		this.dependencies.add(resolved.path);
 
 		const cached = this.imageCache.get(resolved.path);
 		if (cached !== undefined) {
@@ -220,7 +192,7 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 		options: AssetLoadOptions = {},
 	): Promise<StylesheetAssetResult> {
 		throwIfRenderAborted(options.signal);
-		const resolved = resolveSameFolderAssetPath(
+		const resolved = resolveAssetPath(
 			this.documentPath,
 			reference,
 		);
@@ -230,6 +202,7 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 		if (!isCssPath(resolved.fileName)) {
 			return failure('unsupported-type', 'stylesheet', reference);
 		}
+		this.dependencies.add(resolved.path);
 
 		const cached = this.stylesheetCache.get(resolved.path);
 		if (cached !== undefined) {
@@ -266,7 +239,7 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 	private async loadImageFile(
 		path: string,
 		reference: string,
-		mimeType: string,
+		mimeType: RasterMimeType,
 		signal?: AbortSignal,
 	): Promise<ImageAssetResult> {
 		const file = this.vault.getFileByPath(path);
@@ -283,6 +256,9 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 		try {
 			const data = await this.vault.readBinary(file);
 			throwIfRenderAborted(signal);
+			if (!validateRasterImage(data, mimeType).ok) {
+				return failure('invalid-data', 'image', reference);
+			}
 			if (
 				data.byteLength > this.limits.maxImageBytes ||
 				!this.reserveBytes(data.byteLength)
@@ -290,9 +266,6 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 				return failure('too-large', 'image', reference);
 			}
 			const url = this.createImageUrl(data, mimeType);
-			if (url.startsWith('blob:')) {
-				this.objectUrls.add(url);
-			}
 			return { ok: true, url };
 		} catch (error) {
 			if (isRenderAborted(error)) {
@@ -319,7 +292,7 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 		}
 
 		try {
-			const css = await this.vault.cachedRead(file);
+			const css = await this.vault.read(file);
 			throwIfRenderAborted(signal);
 			const size = new TextEncoder().encode(css).byteLength;
 			if (
@@ -328,7 +301,7 @@ export class SameFolderAssetLoader implements HtmlAssetLoader {
 			) {
 				return failure('too-large', 'stylesheet', reference);
 			}
-			return { css, ok: true };
+			return { css, ok: true, path };
 		} catch (error) {
 			if (isRenderAborted(error)) {
 				throw error;
