@@ -40,6 +40,8 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | Working tree based on `aaef36e` | 0.0.1788311102 local build | N/A | Node.js 26.7.0 on macOS 26.6.2 | Adversarial hardening, feature, and behavioral-view suite plus `npm run check` | Pass | ESLint reported 0 findings. Vitest passed 12 files and 132 tests. Strict type-check and the minified production build passed; `npm audit --audit-level=high` reported 0 vulnerabilities. Coverage now includes resource budgets and deduplication, render-wide cancellation, pre-read file rejection, exact raw CSS preservation and stylesheet semantics, MathML safety, special request attributes, warning layout, behavioral view integration, and pre-push release validation. |
 | 2026-09-01 | Working tree based on `aaef36e` | 0.0.1788311102 local build | 1.13.7 | macOS 26.6.2 desktop | `mathml.html`, `css-raw-text.html`, `same-folder-assets/failures.html`, and `hostile.html` | Pass | After a full Obsidian process restart, native MathML rendered as a purple equation with its accessibility label while the unsafe `annotation-xml` content remained absent. DevTools computed the raw-CSS fixture's child-selector border as `rgb(22, 163, 74)`, nested-selector text as `rgb(124, 58, 237)`, and generated content as `" <&> preserved"`. The failure warning had `position: static`; its bottom and the iframe top were both `190.9921875`, proving it consumed layout rather than covering content. The hostile fixture continued to report its HTTP(S), `file:`, `app:`, and traversal resources as blocked. Obsidian's plugin-reload control retained the prior JavaScript, so the new runtime was verified only after a full process restart. |
 | 2026-09-01 | `aaef36e` | 0.0.1788311102 Community build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `mathml.html`, `css-raw-text.html`, and `failures.html` | Invalid regression attempt; fixed bundle absent | The maintainer confirmed the displayed version and force-quit Obsidian, but none of the new expectations appeared. Artifact comparison then proved the approved vault had the published `main.js` (`46260bd8…`, excluding Obsidian's suffix) and `styles.css` (`412cc11a…`), not the fixed working-tree artifacts (`52aa33bf…` and `173d6e9d…`). The shared manifest hash and version therefore did not prove runtime parity. The observed mobile behavior is consistent with those public assets; the fixed source requires a new release before this regression can be evaluated. |
+| 2026-09-01 | `bf72360` | 0.0.1788317389 | N/A | GitHub-hosted Ubuntu runner | Hardened pre-push release workflow and published artifact verification | Pass | Source and exact tagged-release lint, all 132 tests, strict type-check, production build, required-asset checks, atomic main/tag push, provenance generation, release publication, and final remote verification all passed. Published `main.js` (`52aa33bf…`) and `styles.css` (`173d6e9d…`) matched the desktop-tested fixed build exactly. |
+| 2026-09-01 | `bf72360` | 0.0.1788317389 Community build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `mathml.html`, `css-raw-text.html`, and `failures.html` | Pass, maintainer-observed | After installing the new Community release and force-quitting Obsidian, the maintainer validated all three regressions: native static MathML rendered, raw CSS child/nested selectors and generated content rendered correctly, and the resource-warning banner remained readable above rather than over the surviving document content. |
 
 ## Automated security coverage
 
@@ -112,20 +114,10 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-All requested desktop verification is complete. One precise real-device
-regression remains for this working tree: after syncing and fully restarting
-Obsidian on the recorded iPhone 16 Pro, open `mathml.html` and confirm the purple
-equation and its static text render without a popup or navigation; open
-`css-raw-text.html` and confirm the green border, purple nested-selector text,
-and `<&> preserved` generated content; then open `failures.html` and confirm its
-warning is readable above (not over) the surviving document content. Earlier
-published builds already passed the mobile security and live-refresh checks,
-but this uncommitted local build has not yet received that mobile regression.
-
-The reordered release workflow also requires one ordinary GitHub-hosted run on
-the next authorized main-branch push to provide operational evidence that the
-tagged checks finish before the atomic push. Automated workflow-policy tests
-already verify that ordering locally; no push was performed for this work.
+No manual verification remains for the implemented milestones. Release
+`0.0.1788317389` passed the recorded desktop checks, the same three regression
+fixtures on the recorded iPhone, and an operational GitHub-hosted run of the
+reordered release workflow.
 
 ## Asset representation deviation
 
