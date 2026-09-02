@@ -121,9 +121,12 @@ jobs:
         run: |
           set -euo pipefail
           now_seconds="$(date -u +%s)"
+          git_auth_header="$(
+            printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n'
+          )"
 
           for attempt in 1 2 3; do
-            git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $GH_TOKEN" \
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $git_auth_header" \
               fetch --prune --tags origin \
               "+refs/heads/main:refs/remotes/origin/main"
             result="$(node scripts/prepare-release.mjs \
@@ -141,7 +144,7 @@ jobs:
 
             test "$version" = "$VERSION"
             test "$release_commit" = "$RELEASE_COMMIT"
-            if git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $GH_TOKEN" \
+            if git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $git_auth_header" \
               push --atomic origin \
               "$main_commit:refs/heads/main" \
               "refs/tags/$version:refs/tags/$version"; then
@@ -222,6 +225,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git_auth_header="$(
+            printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n'
+          )"
           test "$(gh release view "$VERSION" --json isDraft --jq '.isDraft')" = "false"
           test "$(gh release view "$VERSION" --json isPrerelease --jq '.isPrerelease')" = "false"
 
@@ -239,7 +245,7 @@ jobs:
           gh attestation verify manifest.json --repo "$GITHUB_REPOSITORY"
           gh attestation verify styles.css --repo "$GITHUB_REPOSITORY"
 
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer $GH_TOKEN" \
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $git_auth_header" \
             fetch origin "+refs/heads/main:refs/remotes/origin/main"
           head_version="$(git show refs/remotes/origin/main:manifest.json | \
             jq -r '.version')"

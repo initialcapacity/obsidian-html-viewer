@@ -121,6 +121,12 @@ describe('GitHub Actions policy', () => {
 		expect(RELEASE_WORKFLOW).not.toContain('git push --force');
 		expect(RELEASE_WORKFLOW).not.toContain('--clobber');
 		expect(RELEASE_WORKFLOW).toContain('for attempt in 1 2 3');
+		expect(RELEASE_WORKFLOW).toContain(
+			"printf 'x-access-token:%s' \"$GH_TOKEN\" | base64 | tr -d '\\n'",
+		);
+		expect(RELEASE_WORKFLOW).toContain('AUTHORIZATION: basic $git_auth_header');
+		expect(RELEASE_WORKFLOW).not.toContain('AUTHORIZATION: bearer');
+		expect(RELEASE_WORKFLOW).not.toContain('x-access-token:${GH_TOKEN}@');
 		expect(validatedCheckoutIndex).toBeGreaterThan(pushIndex);
 		expect(validatedCheckoutIndex).toBeLessThan(
 			RELEASE_WORKFLOW.indexOf('gh release create'),
