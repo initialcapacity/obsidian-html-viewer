@@ -1,4 +1,13 @@
 import type { HtmlAssetLoader } from './asset-loader';
+import {
+	isRenderAborted,
+	throwIfRenderAborted,
+} from './render-abort';
+
+export const MAX_HTML_SOURCE_CHARACTERS = 5_000_000;
+export const MAX_HTML_SOURCE_BYTES = 10 * 1024 * 1024;
+export const MAX_ASSET_REFERENCES = 256;
+export const MAX_EMBEDDED_ASSET_CHARACTERS = 25 * 1024 * 1024;
 
 export const CONTENT_SECURITY_POLICY =
 	"default-src 'none'; " +
@@ -24,7 +33,6 @@ const ACTIVE_ELEMENT_SELECTOR = [
 	'frame',
 	'frameset',
 	'iframe',
-	'math',
 	'object',
 	'portal',
 	'script',
@@ -33,12 +41,16 @@ const ACTIVE_ELEMENT_SELECTOR = [
 	'template',
 	'track',
 	'video',
+	'webview',
+	'annotation-xml',
 ].join(',');
 
 const NAVIGATION_OR_RESOURCE_ATTRIBUTES = new Set([
 	'action',
 	'archive',
+	'attributionsrc',
 	'background',
+	'browsingtopics',
 	'cite',
 	'codebase',
 	'data',
@@ -77,7 +89,7 @@ const FORM_CONTROL_SELECTOR = [
 ].join(',');
 
 const RASTER_DATA_URL =
-	/^data:image\/(?:avif|gif|jpeg|png|webp);base64,[a-z\d+/]*={0,2}$/i;
+	/^data:image\/(?:avif|gif|jpeg|png|webp);base64,[a-z\d+/\t\n\f\r ]*={0,2}$/i;
 
 function removeElements(document: Document, selector: string): void {
 	for (const element of Array.from(document.querySelectorAll(selector))) {
@@ -111,8 +123,11 @@ interface ImageReference {
 }
 
 interface StylesheetReference {
+	disabled: boolean;
 	element: HTMLLinkElement;
+	media: string | null;
 	reference: string;
+	title: string | null;
 }
 
 interface SanitizedDocument {
@@ -126,6 +141,11 @@ export interface PreparedHtmlResult {
 	warnings: string[];
 }
 
+export interface PrepareHtmlOptions {
+	maxEmbeddedAssetCharacters?: number;
+	signal?: AbortSignal;
+}
+
 function sanitizeAttributes(element: Element): void {
 	const tagName = element.localName.toLowerCase();
 	const authoredImageSource = tagName === 'img' && element.hasAttribute('src');
@@ -133,9 +153,10 @@ function sanitizeAttributes(element: Element): void {
 
 	for (const attribute of Array.from(element.attributes)) {
 		const name = attribute.name.toLowerCase();
+		const localName = attribute.localName.toLowerCase();
 		const value = attribute.value.trim();
 
-		if (name.startsWith('on')) {
+		if (name.startsWith('on') || localName.startsWith('on')) {
 			element.removeAttribute(attribute.name);
 			continue;
 		}
@@ -145,8 +166,12 @@ function sanitizeAttributes(element: Element): void {
 			continue;
 		}
 
-		if (name === 'href') {
-			if ((tagName === 'a' || tagName === 'area') && value.startsWith('#')) {
+		if (localName === 'href') {
+			if (
+				name === 'href' &&
+				(tagName === 'a' || tagName === 'area') &&
+				value.startsWith('#')
+			) {
 				element.setAttribute('href', value);
 			} else {
 				element.removeAttribute(attribute.name);
@@ -154,8 +179,12 @@ function sanitizeAttributes(element: Element): void {
 			continue;
 		}
 
-		if (name === 'src') {
-			if (tagName === 'img' && isAllowedRasterDataUrl(value)) {
+		if (localName === 'src') {
+			if (
+				name === 'src' &&
+				tagName === 'img' &&
+				isAllowedRasterDataUrl(value)
+			) {
 				element.setAttribute('src', value);
 			} else {
 				element.removeAttribute(attribute.name);
@@ -164,7 +193,10 @@ function sanitizeAttributes(element: Element): void {
 			continue;
 		}
 
-		if (NAVIGATION_OR_RESOURCE_ATTRIBUTES.has(name)) {
+		if (
+			NAVIGATION_OR_RESOURCE_ATTRIBUTES.has(name) ||
+			NAVIGATION_OR_RESOURCE_ATTRIBUTES.has(localName)
+		) {
 			element.removeAttribute(attribute.name);
 		}
 	}
@@ -206,6 +238,10 @@ function insertContentSecurityPolicy(document: Document): void {
 }
 
 function parseAndSanitize(source: string): SanitizedDocument {
+	if (source.length > MAX_HTML_SOURCE_CHARACTERS) {
+		throw new Error('HTML document exceeds the safe rendering size limit.');
+	}
+
 	const parser = new DOMParser();
 	const parsed = parser.parseFromString(source, 'text/html');
 
@@ -232,10 +268,22 @@ function parseAndSanitize(source: string): SanitizedDocument {
 		)
 		.map(
 			(element): StylesheetReference => ({
+				disabled:
+					element.hasAttribute('disabled') ||
+					(element.getAttribute('rel') ?? '')
+						.toLowerCase()
+						.split(/\s+/u)
+						.includes('alternate'),
 				element,
+				media: element.getAttribute('media'),
 				reference: element.getAttribute('href') ?? '',
+				title: element.getAttribute('title'),
 			}),
 		);
+
+	if (images.length + stylesheets.length > MAX_ASSET_REFERENCES) {
+		throw new Error('HTML document contains too many asset references.');
+	}
 
 	for (const element of Array.from(parsed.querySelectorAll('*'))) {
 		sanitizeAttributes(element);
@@ -248,7 +296,37 @@ function parseAndSanitize(source: string): SanitizedDocument {
 function serializePrepared(document: Document): string {
 	insertContentSecurityPolicy(document);
 	const serializer = new XMLSerializer();
-	return `<!doctype html>\n${serializer.serializeToString(document.documentElement)}`;
+	const styles = Array.from(document.querySelectorAll('style')).map((style) => ({
+		css: style.textContent ?? '',
+		style,
+	}));
+	const initialSerialization = serializer.serializeToString(
+		document.documentElement,
+	);
+	let markerPrefix = '__HTML_DOCUMENT_VIEWER_RAW_STYLE_0_';
+	let markerAttempt = 0;
+	while (initialSerialization.includes(markerPrefix)) {
+		markerAttempt += 1;
+		markerPrefix = `__HTML_DOCUMENT_VIEWER_RAW_STYLE_${markerAttempt}_`;
+	}
+
+	for (const [index, entry] of styles.entries()) {
+		entry.style.textContent = `${markerPrefix}${index}__`;
+	}
+
+	let serialized = serializer.serializeToString(document.documentElement);
+	for (const [index, entry] of styles.entries()) {
+		const marker = `${markerPrefix}${index}__`;
+		const rawCss = entry.css
+			.replaceAll('\0', '�')
+			.replace(/<\/style/giu, '<\\/style');
+		if (!serialized.includes(marker)) {
+			throw new Error('Unable to serialize a stylesheet safely.');
+		}
+		serialized = serialized.replace(marker, rawCss);
+	}
+
+	return `<!doctype html>\n${serialized}`;
 }
 
 function recordWarning(warnings: Set<string>, message: string): void {
@@ -258,6 +336,7 @@ function recordWarning(warnings: Set<string>, message: string): void {
 function createDetachedStylesheet(
 	document: Document,
 	css: string,
+	reference: StylesheetReference,
 ): HTMLStyleElement {
 	const template = new DOMParser().parseFromString(
 		'<style></style>',
@@ -270,15 +349,48 @@ function createDetachedStylesheet(
 
 	const adopted = document.adoptNode(style);
 	adopted.textContent = css;
+	if (reference.disabled) {
+		adopted.setAttribute('media', 'not all');
+	} else if (reference.media !== null) {
+		adopted.setAttribute('media', reference.media);
+	}
+	if (reference.title !== null) {
+		adopted.setAttribute('title', reference.title);
+	}
 	return adopted;
+}
+
+async function loadImage(
+	assetLoader: HtmlAssetLoader,
+	reference: string,
+	signal?: AbortSignal,
+) {
+	return signal === undefined
+		? assetLoader.loadImage(reference)
+		: assetLoader.loadImage(reference, { signal });
+}
+
+async function loadStylesheet(
+	assetLoader: HtmlAssetLoader,
+	reference: string,
+	signal?: AbortSignal,
+) {
+	return signal === undefined
+		? assetLoader.loadStylesheet(reference)
+		: assetLoader.loadStylesheet(reference, { signal });
 }
 
 /**
  * Parse and prepare hostile HTML in a detached document. The returned string is
  * intended only for an iframe's `srcdoc` property.
  */
-export function prepareHtml(source: string): string {
+export function prepareHtml(
+	source: string,
+	options: PrepareHtmlOptions = {},
+): string {
+	throwIfRenderAborted(options.signal);
 	const sanitized = parseAndSanitize(source);
+	throwIfRenderAborted(options.signal);
 	removeElements(sanitized.document, 'link');
 	return serializePrepared(sanitized.document);
 }
@@ -291,18 +403,48 @@ export function prepareHtml(source: string): string {
 export async function prepareHtmlWithAssets(
 	source: string,
 	assetLoader: HtmlAssetLoader,
+	options: PrepareHtmlOptions = {},
 ): Promise<PreparedHtmlResult> {
+	throwIfRenderAborted(options.signal);
 	const sanitized = parseAndSanitize(source);
+	throwIfRenderAborted(options.signal);
 	const warnings = new Set<string>();
+	const embeddedAssetLimit = Math.min(
+		options.maxEmbeddedAssetCharacters ?? MAX_EMBEDDED_ASSET_CHARACTERS,
+		MAX_EMBEDDED_ASSET_CHARACTERS,
+	);
+	let embeddedAssetCharacters = 0;
+	const reserveEmbeddedCharacters = (size: number): boolean => {
+		if (embeddedAssetCharacters + size > embeddedAssetLimit) {
+			return false;
+		}
+
+		embeddedAssetCharacters += size;
+		return true;
+	};
 
 	for (const image of sanitized.images) {
+		throwIfRenderAborted(options.signal);
 		if (isAllowedRasterDataUrl(image.reference.trim())) {
 			continue;
 		}
 
 		try {
-			const result = await assetLoader.loadImage(image.reference);
+			const result = await loadImage(
+				assetLoader,
+				image.reference,
+				options.signal,
+			);
 			if (result.ok) {
+				if (!reserveEmbeddedCharacters(result.url.length)) {
+					const message =
+						'Skipped local assets because the prepared document is too large.';
+					recordWarning(warnings, message);
+					if (!image.hadAuthoredAlt) {
+						image.element.setAttribute('alt', message);
+					}
+					continue;
+				}
 				image.element.setAttribute('src', result.url);
 				image.element.removeAttribute('data-html-document-viewer-blocked');
 				continue;
@@ -312,7 +454,10 @@ export async function prepareHtmlWithAssets(
 			if (!image.hadAuthoredAlt) {
 				image.element.setAttribute('alt', result.message);
 			}
-		} catch {
+		} catch (error) {
+			if (isRenderAborted(error)) {
+				throw error;
+			}
 			const message = 'Unable to load a local image.';
 			recordWarning(warnings, message);
 			if (!image.hadAuthoredAlt) {
@@ -322,17 +467,37 @@ export async function prepareHtmlWithAssets(
 	}
 
 	for (const stylesheet of sanitized.stylesheets) {
+		throwIfRenderAborted(options.signal);
 		try {
-			const result = await assetLoader.loadStylesheet(stylesheet.reference);
+			const result = await loadStylesheet(
+				assetLoader,
+				stylesheet.reference,
+				options.signal,
+			);
 			if (result.ok) {
+				if (!reserveEmbeddedCharacters(result.css.length)) {
+					recordWarning(
+						warnings,
+						'Skipped local assets because the prepared document is too large.',
+					);
+					stylesheet.element.remove();
+					continue;
+				}
 				stylesheet.element.replaceWith(
-					createDetachedStylesheet(sanitized.document, result.css),
+					createDetachedStylesheet(
+						sanitized.document,
+						result.css,
+						stylesheet,
+					),
 				);
 			} else {
 				recordWarning(warnings, result.message);
 				stylesheet.element.remove();
 			}
-		} catch {
+		} catch (error) {
+			if (isRenderAborted(error)) {
+				throw error;
+			}
 			recordWarning(warnings, 'Unable to load a local stylesheet.');
 			stylesheet.element.remove();
 		}

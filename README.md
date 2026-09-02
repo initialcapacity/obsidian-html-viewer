@@ -39,6 +39,10 @@ manifests, and every default resource type.
 - Supported same-folder raster bytes are rewritten to generated base64 `data:`
   URLs only after vault lookup and explicit type validation. Stylesheet text is
   inserted into the detached document without HTML interpolation.
+- Documents are bounded before rendering: HTML source, authored asset count,
+  individual image and stylesheet size, aggregate loaded bytes, and embedded
+  output expansion all have fixed limits. Repeated references share one vault
+  read, and superseded renders stop before further asset processing.
 - Remote URLs in inline CSS remain blocked by CSP and cannot load.
 - The plugin makes no telemetry or network requests.
 
@@ -49,12 +53,16 @@ There is no trusted mode, bypass toggle, or setting that weakens this model.
 The current build supports:
 
 - ordinary static HTML;
+- static presentation MathML, excluding `annotation-xml` integration content;
 - inline CSS in `<style>` and `style` attributes;
 - fragment-only links such as `href="#section"`; and
-- embedded base64 raster data images using PNG, JPEG, GIF, WebP, or AVIF;
+- embedded base64 raster data images, including line-wrapped base64, using PNG,
+  JPEG, GIF, WebP, or AVIF;
 - relative PNG, JPEG, GIF, WebP, and AVIF images in the HTML file's own folder;
   and
-- relative `.css` stylesheets in that same folder.
+- relative `.css` stylesheets in that same folder. Stylesheet `media` and
+  `title` semantics are preserved; disabled and alternate stylesheets remain
+  inactive.
 
 An open document refreshes after its source changes. Vault changes in the same
 folder are also watched so relative assets refresh after a create, modification,
@@ -82,10 +90,16 @@ sandbox, the no-network guarantee, and the same-folder validation boundary.
 - JavaScript, event handlers, WebAssembly, workers, embedded frames, objects,
   forms, downloads, popups, meta refresh, and top-level navigation are blocked.
 - Remote resources and filesystem/application URLs are blocked.
-- SVG, CSS `@import`, CSS `url(...)` assets, `srcset`, fonts, audio, and video are
-  not supported.
+- SVG, `srcset`, audio, video, and MathML `annotation-xml` are not supported.
+- CSS `@import`, network `url(...)` references, and vault-file URLs inside CSS
+  are not resolved. The CSP continues to permit inert `data:`/`blob:` values,
+  but the plugin does not generate CSS asset or font URLs.
 - Assets in parent folders, nested folders, or any folder other than the HTML
   document's own folder are not supported.
+- HTML files are limited to 10 MiB and 5,000,000 decoded source characters,
+  with at most 256 authored asset references. Local images are limited to 10
+  MiB each, stylesheets to 1 MiB each, total loaded assets to 25 MiB, and
+  embedded asset output to 25 MiB.
 - Vault-aware link navigation, settings, and editing are not supported.
 
 ## Platforms

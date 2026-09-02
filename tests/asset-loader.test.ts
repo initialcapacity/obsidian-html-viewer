@@ -1,6 +1,7 @@
 import type { TFile } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 import {
+	MAX_ASSET_REFERENCE_LENGTH,
 	SameFolderAssetLoader,
 	resolveSameFolderAssetPath,
 } from '../src/asset-loader';
@@ -42,6 +43,7 @@ describe('same-folder path resolution', () => {
 		['encoded null byte', 'image.png%00.css'],
 		['malformed percent encoding', 'image%ZZ.png'],
 		['two dot prefixes', './../image.png'],
+		['overlong reference', `${'a'.repeat(MAX_ASSET_REFERENCE_LENGTH)}.png`],
 	])('rejects %s', (_label, reference) => {
 		expect(
 			resolveSameFolderAssetPath('folder/index.html', reference),
@@ -125,6 +127,135 @@ describe('same-folder asset loading', () => {
 		});
 		expect(cachedRead).toHaveBeenCalledWith(testFile);
 		expect(objectUrls).toHaveLength(0);
+	});
+
+	it('deduplicates equivalent image and stylesheet reads', async () => {
+		const readBinary = vi.fn(async () => new ArrayBuffer(4));
+		const cachedRead = vi.fn(async () => 'body { color: green; }');
+		const createImageUrl = vi.fn(() => 'blob:deduplicated');
+		const loader = new SameFolderAssetLoader(
+			{
+				cachedRead,
+				getFileByPath: vi.fn(() => testFile),
+				readBinary,
+			},
+			'folder/index.html',
+			createImageUrl,
+			new Set(),
+		);
+
+		await Promise.all([
+			loader.loadImage('image.png'),
+			loader.loadImage('./image.png'),
+			loader.loadStylesheet('style.css'),
+			loader.loadStylesheet('./style.css'),
+		]);
+
+		expect(readBinary).toHaveBeenCalledOnce();
+		expect(createImageUrl).toHaveBeenCalledOnce();
+		expect(cachedRead).toHaveBeenCalledOnce();
+	});
+
+	it('enforces per-asset and aggregate byte limits', async () => {
+		const firstImage: TFile = {} as never;
+		const secondImage: TFile = {} as never;
+		const stylesheet: TFile = {} as never;
+		const loader = new SameFolderAssetLoader(
+			{
+				cachedRead: vi.fn(async () => '12345'),
+				getFileByPath: vi.fn((path: string) =>
+					path.endsWith('first.png')
+						? firstImage
+						: path.endsWith('second.png')
+							? secondImage
+							: stylesheet,
+				),
+				readBinary: vi.fn(async () => new ArrayBuffer(3)),
+			},
+			'folder/index.html',
+			vi.fn(() => 'blob:bounded'),
+			new Set(),
+			{
+				maxImageBytes: 4,
+				maxStylesheetBytes: 4,
+				maxTotalBytes: 5,
+			},
+		);
+
+		await expect(loader.loadImage('first.png')).resolves.toMatchObject({
+			ok: true,
+		});
+		await expect(loader.loadImage('second.png')).resolves.toMatchObject({
+			ok: false,
+			reason: 'too-large',
+		});
+		await expect(loader.loadStylesheet('style.css')).resolves.toMatchObject({
+			ok: false,
+			reason: 'too-large',
+		});
+	});
+
+	it('does not convert bytes after an in-flight read is aborted', async () => {
+		const controller = new AbortController();
+		let finishRead: ((data: ArrayBuffer) => void) | undefined;
+		const readBinary = vi.fn(
+			async () =>
+				await new Promise<ArrayBuffer>((resolveRead) => {
+					finishRead = resolveRead;
+				}),
+		);
+		const createImageUrl = vi.fn(() => 'blob:should-not-exist');
+		const loader = new SameFolderAssetLoader(
+			{
+				cachedRead: vi.fn(),
+				getFileByPath: vi.fn(() => testFile),
+				readBinary,
+			},
+			'folder/index.html',
+			createImageUrl,
+			new Set(),
+		);
+		const pending = loader.loadImage('image.png', {
+			signal: controller.signal,
+		});
+
+		controller.abort();
+		finishRead?.(new ArrayBuffer(4));
+
+		await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+		expect(createImageUrl).not.toHaveBeenCalled();
+	});
+
+	it('rejects an oversized asset from vault metadata before reading it', async () => {
+		const oversizedFile: TFile = { stat: { size: 5 } } as never;
+		const readBinary = vi.fn();
+		const cachedRead = vi.fn();
+		const loader = new SameFolderAssetLoader(
+			{
+				cachedRead,
+				getFileByPath: vi.fn(() => oversizedFile),
+				readBinary,
+			},
+			'folder/index.html',
+			vi.fn(),
+			new Set(),
+			{
+				maxImageBytes: 4,
+				maxStylesheetBytes: 4,
+				maxTotalBytes: 8,
+			},
+		);
+
+		await expect(loader.loadImage('image.png')).resolves.toMatchObject({
+			ok: false,
+			reason: 'too-large',
+		});
+		await expect(loader.loadStylesheet('style.css')).resolves.toMatchObject({
+			ok: false,
+			reason: 'too-large',
+		});
+		expect(readBinary).not.toHaveBeenCalled();
+		expect(cachedRead).not.toHaveBeenCalled();
 	});
 
 	it('classifies invalid, unsupported, missing, and unreadable assets safely', async () => {

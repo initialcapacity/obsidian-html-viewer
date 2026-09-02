@@ -212,7 +212,66 @@ describe('HTML preparation with vault assets', () => {
 
 		expect(prepared.getElementById('css-script')).toBeNull();
 		expect(prepared.querySelector('style')?.textContent).toContain(
-			'&lt;/style&gt;&lt;script',
+			'<\\/style><script',
 		);
+	});
+
+	it('preserves external stylesheet raw text and link presentation semantics', async () => {
+		const css =
+			'main > p { color: red; } .card { & > strong { content: "<&>"; } }';
+		const result = await prepareHtmlWithAssets(
+			`<link rel="stylesheet" href="screen.css" media="screen and (min-width: 1px)" title="Screen">
+			<link rel="alternate stylesheet" href="alternate.css" media="print" title="Alternate">`,
+			loader(vi.fn(), async () => ({ css, ok: true })),
+		);
+		const styles = Array.from(parsePrepared(result.html).querySelectorAll('style'));
+
+		expect(styles).toHaveLength(2);
+		expect(styles[0]?.textContent).toBe(css);
+		expect(styles[0]?.getAttribute('media')).toBe(
+			'screen and (min-width: 1px)',
+		);
+		expect(styles[0]?.getAttribute('title')).toBe('Screen');
+		expect(styles[1]?.textContent).toBe(css);
+		expect(styles[1]?.getAttribute('media')).toBe('not all');
+		expect(styles[1]?.getAttribute('title')).toBe('Alternate');
+	});
+
+	it('aborts between asset reads and does not start later work', async () => {
+		const controller = new AbortController();
+		const loadImage = vi.fn(async () => {
+			controller.abort();
+			return { ok: true as const, url: 'blob:first' };
+		});
+		const loadStylesheet = vi.fn();
+
+		await expect(
+			prepareHtmlWithAssets(
+				'<img src="first.png"><img src="second.png"><link rel="stylesheet" href="style.css">',
+				loader(loadImage, loadStylesheet),
+				{ signal: controller.signal },
+			),
+		).rejects.toMatchObject({ name: 'AbortError' });
+		expect(loadImage).toHaveBeenCalledOnce();
+		expect(loadStylesheet).not.toHaveBeenCalled();
+	});
+
+	it('bounds repeated embedded asset expansion after deduplicated loads', async () => {
+		const result = await prepareHtmlWithAssets(
+			'<img id="first" src="image.png"><img id="second" src="image.png"><link rel="stylesheet" href="style.css">',
+			loader(
+				async () => ({ ok: true, url: 'data:image/png;base64,AAAA' }),
+				async () => ({ css: 'body { color: green; }', ok: true }),
+			),
+			{ maxEmbeddedAssetCharacters: 30 },
+		);
+		const prepared = parsePrepared(result.html);
+
+		expect(prepared.getElementById('first')?.hasAttribute('src')).toBe(true);
+		expect(prepared.getElementById('second')?.hasAttribute('src')).toBe(false);
+		expect(prepared.querySelector('style')).toBeNull();
+		expect(result.warnings).toEqual([
+			'Skipped local assets because the prepared document is too large.',
+		]);
 	});
 });

@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CONTENT_SECURITY_POLICY, prepareHtml } from '../src/prepare-html';
+import {
+	CONTENT_SECURITY_POLICY,
+	MAX_ASSET_REFERENCES,
+	MAX_HTML_SOURCE_CHARACTERS,
+	prepareHtml,
+} from '../src/prepare-html';
 
 const EXPECTED_CSP =
 	"default-src 'none'; " +
@@ -46,7 +51,7 @@ describe('prepareHtml', () => {
 
 		expect(
 			prepared.querySelector(
-				'script, iframe, frame, frameset, object, embed, applet, portal, fencedframe, svg, math, template, audio, video, source, track',
+				'script, iframe, frame, frameset, object, embed, applet, portal, fencedframe, svg, template, audio, video, source, track, webview, annotation-xml',
 			),
 		).toBeNull();
 		expect(prepared.getElementById('script-marker')).toBeNull();
@@ -95,6 +100,18 @@ describe('prepareHtml', () => {
 			expect(href === null || href.startsWith('#')).toBe(true);
 			expect(link.hasAttribute('ping')).toBe(false);
 			expect(link.hasAttribute('target')).toBe(false);
+		}
+	});
+
+	it('strips special request attributes even when the primary URL is inert', () => {
+		const prepared = parsePrepared(`
+			<a href="#safe" attributionsrc="https://attacker.invalid/register">safe</a>
+			<img src="data:image/png;base64,AA==" attributionsrc="https://attacker.invalid/image" browsingtopics>
+		`);
+
+		for (const element of Array.from(prepared.querySelectorAll('*'))) {
+			expect(element.hasAttribute('attributionsrc')).toBe(false);
+			expect(element.hasAttribute('browsingtopics')).toBe(false);
 		}
 	});
 
@@ -149,6 +166,37 @@ describe('prepareHtml', () => {
 		expect(hostilePrepared).toContain('SUCCESS: scripting is disabled.');
 	});
 
+	it('preserves ordinary CSS raw text exactly across serialization', () => {
+		const source = fixture('css-raw-text.html');
+		const sourceDocument = new DOMParser().parseFromString(source, 'text/html');
+		const css = sourceDocument.querySelector('style')?.textContent;
+		const prepared = parsePrepared(source);
+
+		expect(prepared.querySelector('style')?.textContent).toBe(css);
+	});
+
+	it('preserves static presentation MathML while removing integration points', () => {
+		const prepared = parsePrepared(
+			fixture('mathml.html').replace(
+				'<mi>x</mi>',
+				'<mi id="math-link" href="https://attacker.invalid" xlink:href="https://attacker.invalid">x</mi>',
+			),
+		);
+		const math = prepared.querySelector('math');
+		const mathLink = prepared.getElementById('math-link');
+
+		expect(math).not.toBeNull();
+		expect(math?.querySelector('msup')).not.toBeNull();
+		expect(math?.textContent).toContain('x');
+		expect(prepared.querySelector('annotation-xml, script')).toBeNull();
+		expect(math?.hasAttribute('onclick')).toBe(false);
+		expect(
+			Array.from(mathLink?.attributes ?? []).some(
+				(attribute) => attribute.localName.toLowerCase() === 'href',
+			),
+		).toBe(false);
+	});
+
 	it('removes SVG data images while preserving allowlisted raster MIME types', () => {
 		const prepared = parsePrepared(`
 			<img id="svg" src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=">
@@ -159,6 +207,26 @@ describe('prepareHtml', () => {
 		expect(prepared.getElementById('png')?.getAttribute('src')).toBe(
 			'data:image/png;base64,iVBORw0KGgo=',
 		);
+	});
+
+	it('accepts line-wrapped base64 raster data images', () => {
+		const prepared = parsePrepared(
+			'<img src="data:image/png;base64,iVBO\nRw0K Ggo=">',
+		);
+
+		expect(prepared.querySelector('img')?.getAttribute('src')).toBe(
+			'data:image/png;base64,iVBO\nRw0K Ggo=',
+		);
+	});
+
+	it('bounds source size and authored asset-reference count', () => {
+		expect(() => prepareHtml('x'.repeat(MAX_HTML_SOURCE_CHARACTERS + 1))).toThrow(
+			'safe rendering size limit',
+		);
+		const references = '<img src="image.png">'.repeat(
+			MAX_ASSET_REFERENCES + 1,
+		);
+		expect(() => prepareHtml(references)).toThrow('too many asset references');
 	});
 
 	it('uses browser error recovery for fragments and incomplete HTML', () => {

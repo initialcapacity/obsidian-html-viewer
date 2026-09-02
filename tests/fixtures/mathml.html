@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Static MathML fixture</title>
+  <style>
+    math { color: #7c3aed; font-size: 2rem; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Static MathML rendered</h1>
+  <math display="block" aria-label="x squared plus y squared equals z squared" onclick="bad()">
+    <mrow>
+      <mtext>MathML: </mtext>
+      <msup><mi>x</mi><mn>2</mn></msup>
+      <mo>+</mo>
+      <msup><mi>y</mi><mn>2</mn></msup>
+      <mo>=</mo>
+      <msup><mi>z</mi><mn>2</mn></msup>
+    </mrow>
+    <semantics>
+      <mrow><mi>x</mi></mrow>
+      <annotation-xml encoding="text/html">
+        <script>document.documentElement.dataset.mathScript = 'ran';</script>
+      </annotation-xml>
+    </semantics>
+  </math>
+</body>
+</html>

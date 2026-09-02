@@ -11,7 +11,11 @@ import {
 	navigateIframeToBlank,
 	waitForIframeLayout,
 } from './iframe-boundary';
-import { prepareHtmlWithAssets } from './prepare-html';
+import {
+	MAX_HTML_SOURCE_BYTES,
+	prepareHtmlWithAssets,
+} from './prepare-html';
+import { throwIfRenderAborted } from './render-abort';
 import {
 	RenderCoordinator,
 	isRelevantVaultChange,
@@ -157,15 +161,19 @@ export class HtmlDocumentView extends FileView {
 			return;
 		}
 
-		const layoutAbortController = new AbortController();
+		const renderAbortController = new AbortController();
 		const generation = renderCoordinator.beginRender(() => {
-			layoutAbortController.abort();
+			renderAbortController.abort();
 		});
 		const objectUrls = new Set<string>();
 		updateStatus(status, 'loading', 'Loading HTML document…');
 
 		try {
+			if (file.stat.size > MAX_HTML_SOURCE_BYTES) {
+				throw new Error('HTML document exceeds the safe file-size limit.');
+			}
 			const source = await this.app.vault.cachedRead(file);
+			throwIfRenderAborted(renderAbortController.signal);
 			const ownerWindow = iframe.ownerDocument.defaultView;
 			if (ownerWindow === null) {
 				throw new Error('HTML view does not have an owning window.');
@@ -180,6 +188,7 @@ export class HtmlDocumentView extends FileView {
 			const { html: prepared, warnings } = await prepareHtmlWithAssets(
 				source,
 				assetLoader,
+				{ signal: renderAbortController.signal },
 			);
 
 			if (!renderCoordinator.isCurrent(generation)) {
@@ -188,7 +197,7 @@ export class HtmlDocumentView extends FileView {
 			}
 
 			await waitForIframeLayout(iframe, {
-				signal: layoutAbortController.signal,
+				signal: renderAbortController.signal,
 			});
 			renderCoordinator.tryCommit(generation, objectUrls, () => {
 				iframe.removeAttribute('src');

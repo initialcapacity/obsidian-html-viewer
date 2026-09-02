@@ -60,3 +60,14 @@ Object.defineProperty(Node.prototype, 'createEl', {
 	value: createTestElement,
 	writable: true,
 });
+
+Object.defineProperty(Node.prototype, 'createDiv', {
+	configurable: true,
+	value: function createTestDiv(
+		this: Node,
+		options?: DomElementInfo | string,
+	): HTMLDivElement {
+		return createTestElement.call(this, 'div', options) as HTMLDivElement;
+	},
+	writable: true,
+});

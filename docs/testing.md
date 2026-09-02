@@ -37,6 +37,9 @@ TypeScript build does not count as a desktop or mobile Obsidian test.
 | 2026-09-01 | Working tree based on `15353ff` | 0.0.1788300592 local build | 1.13.7 | macOS 26.6.2 desktop | `same-folder-assets/index.html`, `style.css`, `image.png`, and `failures.html`, including the same document in two panes | Pass | The local stylesheet produced the distinctive green card and the vault PNG rendered. Editing the stylesheet and image changed both open panes in place; restoring them returned both panes to green. The failures fixture kept usable content and showed safe plain-text warnings for every missing, unsupported, traversal, absolute, nested, encoded-traversal, HTTP(S), `file:`, and `app:` reference. DevTools showed CSP blocking the remote CSS import and CSS image URL, with 0 `attacker.invalid` resource entries. |
 | 2026-09-01 | `5cff652` | 0.0.1788303302 | N/A | GitHub-hosted Ubuntu runner and Obsidian Community directory | Automatic release, independent asset verification, provenance, and Community review | Pass | Every source and tagged-release check passed. The published `main.js`, `manifest.json`, and `styles.css` were byte-identical to a fresh local build and all three provenance attestations verified. The Community review passed release-attestation, suspicious-network, vault-access, dependency, obfuscation, and byte-for-byte build-reproduction checks; version 0.0.1788303302 became the current public release. |
 | 2026-09-01 | `5cff652` | 0.0.1788303302 Community build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `same-folder-assets/index.html`, `style.css`, and `image.png` | Pass, maintainer-observed | The synced fixture initially rendered its green stylesheet and green raster image. With the document left open, a desktop stylesheet change refreshed the mobile card to purple while the image remained green; a separate image change then refreshed the image to purple while the card remained purple. Neither update required navigation or reopening. The synced files were restored byte-for-byte to the committed green baseline afterward. |
+| 2026-09-01 | Working tree based on `aaef36e` | 0.0.1788311102 local build | N/A | Node.js 26.7.0 on macOS 26.6.2 | Adversarial hardening, feature, and behavioral-view suite plus `npm run check` | Pass | ESLint reported 0 findings. Vitest passed 12 files and 132 tests. Strict type-check and the minified production build passed; `npm audit --audit-level=high` reported 0 vulnerabilities. Coverage now includes resource budgets and deduplication, render-wide cancellation, pre-read file rejection, exact raw CSS preservation and stylesheet semantics, MathML safety, special request attributes, warning layout, behavioral view integration, and pre-push release validation. |
+| 2026-09-01 | Working tree based on `aaef36e` | 0.0.1788311102 local build | 1.13.7 | macOS 26.6.2 desktop | `mathml.html`, `css-raw-text.html`, `same-folder-assets/failures.html`, and `hostile.html` | Pass | After a full Obsidian process restart, native MathML rendered as a purple equation with its accessibility label while the unsafe `annotation-xml` content remained absent. DevTools computed the raw-CSS fixture's child-selector border as `rgb(22, 163, 74)`, nested-selector text as `rgb(124, 58, 237)`, and generated content as `" <&> preserved"`. The failure warning had `position: static`; its bottom and the iframe top were both `190.9921875`, proving it consumed layout rather than covering content. The hostile fixture continued to report its HTTP(S), `file:`, `app:`, and traversal resources as blocked. Obsidian's plugin-reload control retained the prior JavaScript, so the new runtime was verified only after a full process restart. |
+| 2026-09-01 | `aaef36e` | 0.0.1788311102 Community build | 1.13.7 | iPhone 16 Pro, iOS 26.6 | `mathml.html`, `css-raw-text.html`, and `failures.html` | Invalid regression attempt; fixed bundle absent | The maintainer confirmed the displayed version and force-quit Obsidian, but none of the new expectations appeared. Artifact comparison then proved the approved vault had the published `main.js` (`46260bd8…`, excluding Obsidian's suffix) and `styles.css` (`412cc11a…`), not the fixed working-tree artifacts (`52aa33bf…` and `173d6e9d…`). The shared manifest hash and version therefore did not prove runtime parity. The observed mobile behavior is consistent with those public assets; the fixed source requires a new release before this regression can be evaluated. |
 
 ## Automated security coverage
 
@@ -45,16 +48,25 @@ The unit suite must verify all of the following before a manual install:
 - exact CSP text and placement as the first element in `<head>`;
 - an empty iframe sandbox and `no-referrer` policy;
 - removal of scripts, embedded active elements, event attributes, authored CSP,
-  base elements, meta refresh, remote stylesheets, and unsafe URLs;
+  base elements, meta refresh, remote stylesheets, special request attributes,
+  and unsafe URLs;
 - disabled forms and fragment-only navigation;
-- preservation of inline CSS, allowlisted raster data images, and `<noscript>`;
+- exact raw-text preservation of inline and local CSS, safe escaping of closing
+  style tokens, allowlisted line-wrapped raster data images, and `<noscript>`;
+- preservation of static presentation MathML with removal of
+  `annotation-xml` integration content;
 - browser error recovery for incomplete HTML;
 - no HTML-string insertion API in runtime source;
 - no Node.js, Electron, or network API in runtime source; and
 - consistent fixed identity/version metadata;
 - strict same-folder asset path resolution, including encoded and Unicode input;
 - raster-image MIME allowlisting and isolated missing/unsupported failures; and
-- safe stylesheet adoption without source-text HTML interpolation.
+- safe stylesheet adoption without source-text HTML interpolation;
+- stylesheet media, title, disabled, and alternate semantics;
+- fixed source, reference, per-asset, aggregate-byte, and embedded-output limits;
+- deduplicated asset reads and abort propagation through stale render work; and
+- behavioral view integration for srcdoc commit, warnings, stale reads, and
+  close cleanup.
 
 The lifecycle suite also verifies:
 
@@ -100,10 +112,20 @@ immediately after the observation.
 
 ## Remaining manual verification
 
-No manual verification remains for milestones 1–9. The recorded iPhone does not
-offer the desktop split-pane workflow used for Milestone 6; the two-pane
-acceptance test was therefore performed on desktop, while the same-folder
-stylesheet and image were both rendered and refreshed on desktop and mobile.
+All requested desktop verification is complete. One precise real-device
+regression remains for this working tree: after syncing and fully restarting
+Obsidian on the recorded iPhone 16 Pro, open `mathml.html` and confirm the purple
+equation and its static text render without a popup or navigation; open
+`css-raw-text.html` and confirm the green border, purple nested-selector text,
+and `<&> preserved` generated content; then open `failures.html` and confirm its
+warning is readable above (not over) the surviving document content. Earlier
+published builds already passed the mobile security and live-refresh checks,
+but this uncommitted local build has not yet received that mobile regression.
+
+The reordered release workflow also requires one ordinary GitHub-hosted run on
+the next authorized main-branch push to provide operational evidence that the
+tagged checks finish before the atomic push. Automated workflow-policy tests
+already verify that ordering locally; no push was performed for this work.
 
 ## Asset representation deviation
 

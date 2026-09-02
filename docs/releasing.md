@@ -22,8 +22,9 @@ Before enabling the first release:
    force for user-authored changes.
 
 No personal access token or repository secret is required. The workflow uses
-the run-scoped `GITHUB_TOKEN`, and its marked release commit cannot recursively
-start another release.
+the run-scoped `GITHUB_TOKEN`; GitHub does not create another workflow run for
+the release commit pushed with that token. Commit-message filtering is not used,
+so an ordinary source commit cannot suppress validation by copying a trailer.
 
 ## Automated release path
 
@@ -38,9 +39,11 @@ serialized concurrency group. For each triggering source SHA, it:
    `patch = max(current UTC seconds, highest known patch + 1)`;
 3. updates `manifest.json`, `package.json`, `package-lock.json`, and
    `versions.json`, preserving published version history;
-4. creates a marked release commit and annotated tag with no `v` prefix;
-5. atomically pushes the tag and a non-force update to `main`;
-6. checks out that exact tag and repeats all validation and the fresh build;
+4. creates a local marked release commit and annotated tag with no `v` prefix;
+5. checks out that exact local tag, repeats all validation, and creates a fresh
+   production build;
+6. only after those checks pass, atomically pushes the validated tag and a
+   non-force update to `main`, then restores the exact validated tag checkout;
 7. attests `main.js`, `manifest.json`, and `styles.css`;
 8. creates or safely finishes a published GitHub release with generated notes;
    and
@@ -61,7 +64,7 @@ when repairing a known run.
 
 | Failure point | Persistent state | Safe recovery |
 | --- | --- | --- |
-| Install, lint, test, type-check, or build | None | Fix the source and push normally. No version, tag, or release was created. |
+| Install, lint, test, type-check, or build | No remote state; candidate commits and tags exist only in the disposable runner clone | Fix the source and push normally. No version, tag, or release was published. |
 | Competing `main` update during push | None, because the main/tag push is atomic | The job fetches and retries up to three times while keeping the same release candidate. Re-run if contention continues. |
 | Version commit and tag pushed; attestation or release failed | Marked commit and annotated tag identify the source SHA and version | Re-run the same workflow. It reuses the tag and completes missing safe steps. |
 | Release exists with a missing required asset | Existing release and remaining assets | Re-run. The workflow compares existing assets and uploads only a missing asset. |

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CSS raw-text fixture</title>
+  <style>
+    main > p {
+      border-left: 0.5rem solid #16a34a;
+      padding: 0.75rem;
+    }
+
+    .card {
+      & > strong {
+        color: #7c3aed;
+        font-size: 1.5rem;
+      }
+    }
+
+    .marker::after {
+      content: " <&> preserved";
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>CSS raw text preserved</h1>
+    <p>A green border proves the child selector survived.</p>
+    <div class="card"><strong>Purple nesting survived.</strong></div>
+    <p class="marker">Generated content:</p>
+  </main>
+</body>
+</html>

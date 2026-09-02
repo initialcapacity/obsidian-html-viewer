@@ -16,6 +16,7 @@ describe('runtime source boundary', () => {
 			source('asset-loader.ts'),
 			source('mime.ts'),
 			source('render-coordinator.ts'),
+			source('render-abort.ts'),
 		].join('\n');
 
 		expect(runtime).not.toMatch(/\.innerHTML\s*=/u);
@@ -26,11 +27,12 @@ describe('runtime source boundary', () => {
 
 	it('uses srcdoc only for prepared output and textContent for status messages', () => {
 		const viewSource = source('html-document-view.ts');
+		const layoutWaitIndex = viewSource.indexOf('await waitForIframeLayout(');
+		const srcdocIndex = viewSource.indexOf('iframe.srcdoc = prepared');
 
-		expect(viewSource).toContain('iframe.srcdoc = prepared');
-		expect(viewSource.indexOf('await waitForIframeLayout(iframe)')).toBeLessThan(
-			viewSource.indexOf('iframe.srcdoc = prepared'),
-		);
+		expect(layoutWaitIndex).toBeGreaterThanOrEqual(0);
+		expect(srcdocIndex).toBeGreaterThanOrEqual(0);
+		expect(layoutWaitIndex).toBeLessThan(srcdocIndex);
 		expect(viewSource).toContain('status.textContent =');
 		expect(viewSource).toContain('await prepareHtmlWithAssets(');
 		expect(viewSource).toContain('new SameFolderAssetLoader(');
@@ -77,12 +79,27 @@ describe('runtime source boundary', () => {
 		const runtime = [
 			source('main.ts'),
 			source('html-document-view.ts'),
+			source('iframe-boundary.ts'),
+			source('prepare-html.ts'),
 			source('asset-loader.ts'),
 			source('mime.ts'),
 			source('render-coordinator.ts'),
+			source('render-abort.ts'),
 		].join('\n');
 
 		expect(runtime).not.toMatch(/from ['"](?:node:|fs|path|electron)/u);
 		expect(runtime).not.toMatch(/\b(?:fetch|requestUrl|XMLHttpRequest)\s*\(/u);
+	});
+
+	it('keeps warnings in layout flow and uses theme-safe status colors', () => {
+		const styles = readFileSync(resolve('styles.css'), 'utf8');
+		const warningRule = styles.slice(
+			styles.indexOf("[data-state='warning']"),
+		);
+
+		expect(styles).toContain('background: var(--background-primary);');
+		expect(styles).toContain('color: var(--text-normal);');
+		expect(warningRule).toContain('position: static;');
+		expect(warningRule).toContain('flex: 0 1 auto;');
 	});
 });

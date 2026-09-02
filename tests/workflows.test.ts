@@ -39,7 +39,8 @@ describe('GitHub Actions policy', () => {
 		);
 		expect(RELEASE_WORKFLOW).toContain('queue: max');
 		expect(RELEASE_WORKFLOW).not.toContain('cancel-in-progress: true');
-		expect(RELEASE_WORKFLOW).toContain('Release-Workflow: true');
+		expect(RELEASE_WORKFLOW).not.toContain('github.event.head_commit.message');
+		expect(RELEASE_WORKFLOW).not.toContain('contains(github.event');
 	});
 
 	it('grants exactly the release permissions and pins official actions', () => {
@@ -59,6 +60,7 @@ describe('GitHub Actions policy', () => {
 	});
 
 	it('validates both source and tagged metadata before publishing', () => {
+		const pushIndex = RELEASE_WORKFLOW.indexOf('git push --atomic origin');
 		expect(occurrenceCount(RELEASE_WORKFLOW, 'run: npm ci')).toBe(2);
 		expect(occurrenceCount(RELEASE_WORKFLOW, 'run: npm run lint')).toBe(2);
 		expect(occurrenceCount(RELEASE_WORKFLOW, 'run: npm test')).toBe(2);
@@ -66,19 +68,40 @@ describe('GitHub Actions policy', () => {
 		expect(occurrenceCount(RELEASE_WORKFLOW, 'run: npm run build')).toBe(2);
 		expect(RELEASE_WORKFLOW).toContain('fetch-depth: 0');
 		expect(RELEASE_WORKFLOW).toContain('scripts/prepare-release.mjs');
-		expect(RELEASE_WORKFLOW.indexOf('run: npm test')).toBeLessThan(
-			RELEASE_WORKFLOW.indexOf('git push --atomic origin'),
-		);
-		expect(RELEASE_WORKFLOW.indexOf('run: npm run build')).toBeLessThan(
-			RELEASE_WORKFLOW.indexOf('git push --atomic origin'),
+		expect(pushIndex).toBeGreaterThanOrEqual(0);
+		for (const command of [
+			'run: npm ci',
+			'run: npm run lint',
+			'run: npm test',
+			'run: npm run typecheck',
+			'run: npm run build',
+			'run: test -f main.js && test -f manifest.json && test -f styles.css',
+		]) {
+			const taggedCheckIndex = RELEASE_WORKFLOW.lastIndexOf(command);
+			expect(taggedCheckIndex).toBeGreaterThanOrEqual(0);
+			expect(taggedCheckIndex).toBeLessThan(pushIndex);
+		}
+		expect(RELEASE_WORKFLOW.indexOf('gh release create')).toBeGreaterThan(
+			pushIndex,
 		);
 	});
 
 	it('uses an atomic non-force push and retry-safe release reconciliation', () => {
+		const pushIndex = RELEASE_WORKFLOW.indexOf('git push --atomic origin');
+		const validatedCheckoutIndex = RELEASE_WORKFLOW.indexOf(
+			'git checkout --detach "$RELEASE_COMMIT"',
+		);
 		expect(RELEASE_WORKFLOW).toContain('git push --atomic origin');
 		expect(RELEASE_WORKFLOW).not.toContain('git push --force');
 		expect(RELEASE_WORKFLOW).not.toContain('--clobber');
 		expect(RELEASE_WORKFLOW).toContain('for attempt in 1 2 3');
+		expect(validatedCheckoutIndex).toBeGreaterThan(pushIndex);
+		expect(validatedCheckoutIndex).toBeLessThan(
+			RELEASE_WORKFLOW.indexOf('gh release create'),
+		);
+		expect(RELEASE_WORKFLOW).toContain(
+			'test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"',
+		);
 		expect(RELEASE_WORKFLOW).toContain('Existing $asset does not match');
 		expect(RELEASE_WORKFLOW).toContain('gh release upload');
 	});
