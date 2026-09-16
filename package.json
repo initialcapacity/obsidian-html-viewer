@@ -34,22 +34,22 @@
     "node": ">=22.22.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
-    "@playwright/test": "^1.62.1",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^24.13.3",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@types/node": "^26.5.1",
+    "@vitest/coverage-v8": "^5.0.0",
     "esbuild": "0.28.2",
-    "eslint": "^9.39.5",
+    "eslint": "^10.10.0",
     "eslint-plugin-obsidianmd": "^0.4.2",
-    "fast-check": "^4.9.0",
+    "fast-check": "^4.10.0",
     "globals": "^17.12.0",
     "jiti": "^2.7.0",
     "jsdom": "^30.0.1",
     "obsidian": "1.13.1",
     "obsidian-min-api": "npm:obsidian@1.7.2",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.69.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   }
 }
